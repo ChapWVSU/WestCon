@@ -34,9 +34,9 @@ import kotlinx.coroutines.launch
 
 enum class SearchFilter(val label: String) {
     ALL("All"),
-    SKILLS("Skills"),
-    USERS("Users"),
-    CATEGORIES("Categories")
+    SHARE_SKILL("Sharing"),
+    FIND_SKILL("Finding"),
+    USERS("Users")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,8 +48,11 @@ fun SearchScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(SearchFilter.ALL) }
     
-    val posts by FirebaseManager.getSkillPosts().collectAsState(initial = emptyList())
-    val users by FirebaseManager.getAllUserProfiles().collectAsState(initial = emptyList())
+    val postsFlow = remember { FirebaseManager.getSkillPosts() }
+    val posts by postsFlow.collectAsState(initial = emptyList())
+    
+    val usersFlow = remember { FirebaseManager.getAllUserProfiles() }
+    val users by usersFlow.collectAsState(initial = emptyList())
     
     val filteredResults = remember(searchQuery, posts, users, selectedFilter) {
         if (searchQuery.isBlank()) {
@@ -62,24 +65,25 @@ fun SearchScreen(
                 it.course.contains(searchQuery, ignoreCase = true)
             }
             
-            // 2. Identify matched categories
+            // 2. Identify matched categories (Internal use for associative search)
             val matchedCategories = posts.map { it.category }
                 .distinct()
                 .filter { it.contains(searchQuery, ignoreCase = true) }
             
             // 3. Associative Skill Search:
-            // Match posts where: 
-            // - The title/desc matches the query OR 
-            // - The author matches the query OR
-            // - The category matches the query
             val matchedUserUids = matchedUsers.map { it.uid }.toSet()
             
             val matchedPosts = posts.filter { 
-                it.title.contains(searchQuery, ignoreCase = true) || 
+                (it.title.contains(searchQuery, ignoreCase = true) || 
                 it.description.contains(searchQuery, ignoreCase = true) ||
                 it.authorName.contains(searchQuery, ignoreCase = true) ||
                 matchedUserUids.contains(it.authorUid) ||
-                it.category.contains(searchQuery, ignoreCase = true)
+                it.category.contains(searchQuery, ignoreCase = true)) &&
+                when(selectedFilter) {
+                    SearchFilter.SHARE_SKILL -> it.postType == "SHARE"
+                    SearchFilter.FIND_SKILL -> it.postType == "FIND"
+                    else -> true
+                }
             }
             
             Triple(matchedPosts, matchedUsers, matchedCategories)
@@ -168,7 +172,7 @@ fun SearchScreen(
                 if (searchQuery.isEmpty()) {
                     InitialSearchState(onCategoryClick = { 
                         searchQuery = it 
-                        selectedFilter = SearchFilter.CATEGORIES
+                        selectedFilter = SearchFilter.ALL
                     })
                 } else {
                     SearchResultsContent(
@@ -180,7 +184,7 @@ fun SearchScreen(
                         onProfileClick = onProfileClick,
                         onCategorySelect = { 
                             searchQuery = it
-                            selectedFilter = SearchFilter.SKILLS // Show skills for this category
+                            selectedFilter = SearchFilter.SHARE_SKILL // Show sharing skills for this category by default
                         }
                     )
                 }
@@ -361,13 +365,13 @@ fun SearchResultsContent(
     onProfileClick: (String) -> Unit,
     onCategorySelect: (String) -> Unit
 ) {
-    val showSkills = filter == SearchFilter.ALL || filter == SearchFilter.SKILLS
+    val showSharing = filter == SearchFilter.ALL || filter == SearchFilter.SHARE_SKILL
+    val showFinding = filter == SearchFilter.ALL || filter == SearchFilter.FIND_SKILL
     val showUsers = filter == SearchFilter.ALL || filter == SearchFilter.USERS
-    val showCategories = filter == SearchFilter.ALL || filter == SearchFilter.CATEGORIES
 
-    val noResults = (showSkills && posts.isEmpty()) && 
-                  (showUsers && users.isEmpty()) && 
-                  (showCategories && categories.isEmpty())
+    val noResults = (showSharing && posts.none { it.postType == "SHARE" }) && 
+                  (showFinding && posts.none { it.postType == "FIND" }) && 
+                  (showUsers && users.isEmpty())
 
     if (noResults) {
         EmptySearchState(query)
@@ -376,19 +380,6 @@ fun SearchResultsContent(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            // Categories Section
-            if (showCategories && categories.isNotEmpty()) {
-                item { SectionHeader("Matched Categories") }
-                items(categories) { category ->
-                    ListItem(
-                        headlineContent = { Text(category, fontWeight = FontWeight.Bold) },
-                        leadingContent = { Icon(Icons.Default.Category, contentDescription = null, tint = WestconDarkBlue) },
-                        modifier = Modifier.clickable { onCategorySelect(category) }
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
-                }
-            }
-
             // Users Section
             if (showUsers && users.isNotEmpty()) {
                 item { SectionHeader("Taga-West Users") }
@@ -399,16 +390,34 @@ fun SearchResultsContent(
             }
 
             // Skills Section
-            if (showSkills && posts.isNotEmpty()) {
-                item { SectionHeader("Skill Swaps") }
-                items(posts, key = { it.id }) { post ->
-                    SkillPostCard(
-                        post = post,
-                        isOwnPost = post.authorUid == FirebaseManager.getCurrentUser()?.uid,
-                        onExchangeClick = { /* Handled elsewhere */ },
-                        onMessageClick = { /* Handled elsewhere */ },
-                        onProfileClick = { onProfileClick(post.authorUid) }
-                    )
+            if ((showSharing || showFinding) && posts.isNotEmpty()) {
+                val sharingPosts = posts.filter { it.postType == "SHARE" }
+                val findingPosts = posts.filter { it.postType == "FIND" }
+                
+                if (showSharing && sharingPosts.isNotEmpty()) {
+                    item { SectionHeader("Sharing Skills") }
+                    items(sharingPosts, key = { it.id }) { post ->
+                        SkillPostCard(
+                            post = post,
+                            isOwnPost = post.authorUid == FirebaseManager.getCurrentUser()?.uid,
+                            onExchangeClick = { /* Handled in DashboardScreen */ },
+                            onMessageClick = { /* Handled in DashboardScreen */ },
+                            onProfileClick = { onProfileClick(post.authorUid) }
+                        )
+                    }
+                }
+                
+                if (showFinding && findingPosts.isNotEmpty()) {
+                    item { SectionHeader("Finding Skills") }
+                    items(findingPosts, key = { it.id }) { post ->
+                        SkillPostCard(
+                            post = post,
+                            isOwnPost = post.authorUid == FirebaseManager.getCurrentUser()?.uid,
+                            onExchangeClick = { /* Handled in DashboardScreen */ },
+                            onMessageClick = { /* Handled in DashboardScreen */ },
+                            onProfileClick = { onProfileClick(post.authorUid) }
+                        )
+                    }
                 }
             }
         }

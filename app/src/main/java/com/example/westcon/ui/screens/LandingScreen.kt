@@ -5,25 +5,20 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-// CRITICAL: You were missing these for 'remember' and 'mutableStateOf'
-import androidx.compose.runtime.* import androidx.compose.ui.Alignment
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.westcon.ui.theme.*
-
-// Note: Ensure these are accessible to your signup.kt file!
+import com.example.westcon.ui.FooterSection
 
 @Composable
-fun WestconLoginScreen(onSignUpClick: () -> Unit, onLoginClick: () -> Unit) {
+fun LandingScreen(onSignUpClick: () -> Unit, onLoginClick: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(id = R.drawable.bg_login),
@@ -53,9 +48,6 @@ fun WestconLoginScreen(onSignUpClick: () -> Unit, onLoginClick: () -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(30.dp))
-
-            Text("Let’s get you\nsorted", color = Color.White, fontSize = 36.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
             Spacer(modifier = Modifier.height(24.dp))
             Text("WANT TO CONNECT WITH FELLOW\nTAGA-WESTS?", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp, fontFamily = MomotrustFontFamily)
 
@@ -77,7 +69,7 @@ fun WestconLoginScreen(onSignUpClick: () -> Unit, onLoginClick: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
-                onClick = onLoginClick, // 3. Set this to the parameter
+                onClick = onLoginClick,
                 modifier = Modifier.fillMaxWidth().height(64.dp),
                 shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White)
@@ -102,69 +94,5 @@ fun WestconLoginScreen(onSignUpClick: () -> Unit, onLoginClick: () -> Unit) {
         }
 
         FooterSection(Modifier.align(Alignment.BottomCenter))
-    }
-}
-
-@Composable
-fun SignUpTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    icon: Int,
-    isPassword: Boolean = false,
-    showEyeIcon: Boolean = false
-) {
-    var passwordVisible by remember { mutableStateOf(false) }
-
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = { Text(label, color = Color.Gray) },
-        leadingIcon = {
-            Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(20.dp), tint = WestconDarkBlue)
-        },
-        trailingIcon = {
-            if (isPassword && showEyeIcon) {
-                val image = if (passwordVisible)
-                    painterResource(id = R.drawable.secret)
-                else
-                    painterResource(id = R.drawable.secret_on)
-
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(painter = image, contentDescription = null, modifier = Modifier.size(24.dp), tint = WestconDarkBlue)
-                }
-            }
-        },
-        visualTransformation = if (isPassword && !passwordVisible)
-            PasswordVisualTransformation()
-        else
-            VisualTransformation.None,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        shape = RoundedCornerShape(50),
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedContainerColor = Color.White,
-            focusedContainerColor = Color.White,
-            unfocusedBorderColor = Color.Transparent,
-            focusedBorderColor = WestconYellow,
-            focusedTextColor = Color.Black,
-            unfocusedTextColor = Color.Black
-        ),
-        singleLine = true
-    )
-}
-
-@Composable
-fun FooterSection(modifier: Modifier) {
-    Column(
-        modifier = modifier.padding(bottom = 36.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("ACADEMIC INTEGRITY • PEER COLLABORATION • WVSU EXCELLENCE", color = Color.White.copy(alpha = 0.6f), fontSize = 10.sp, fontFamily = MomotrustFontFamily)
-        Spacer(modifier = Modifier.height(8.dp))
-        Row {
-            Text("Privacy Policy", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, fontFamily = MomotrustFontFamily)
-            Text("  •  ", color = Color.White.copy(alpha = 0.8f))
-            Text("Terms of Service", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, fontFamily = MomotrustFontFamily)
-        }
     }
 }

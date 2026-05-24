@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -13,7 +12,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,14 +21,17 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import com.example.westcon.data.*
 import com.example.westcon.ui.UIUtils
 import com.example.westcon.ui.WestconPullToRefresh
 import com.example.westcon.ui.theme.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // --- Utility Components ---
@@ -70,32 +71,6 @@ fun ProfileStatBadge(icon: ImageVector, label: String, value: String, modifier: 
 }
 
 @Composable
-fun MasteryBadgeSmall(level: Int) {
-    val (label, color) = when(level) {
-        1 -> "Novice" to Color(0xFFADB5BD)
-        2 -> "Intermediate" to Color(0xFF4CAF50)
-        3 -> "Advanced" to Color(0xFF2196F3)
-        4 -> "Expert" to Color(0xFF9C27B0)
-        5 -> "Guru" to Color(0xFFFF9800)
-        else -> "Novice" to Color(0xFFADB5BD)
-    }
-    Surface(
-        color = color.copy(alpha = 0.15f),
-        shape = RoundedCornerShape(4.dp)
-    ) {
-        Text(
-            label, 
-            color = color, 
-            fontSize = 9.sp, 
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-        )
-    }
-}
-
-// --- Main Header ---
-
-@Composable
 fun ProfileHeaderCard(
     profile: UserProfile, 
     isOwnProfile: Boolean = true,
@@ -108,7 +83,7 @@ fun ProfileHeaderCard(
     if (showIconPicker) {
         AlertDialog(
             onDismissRequest = { showIconPicker = false },
-            containerColor = White,
+            containerColor = Color.White,
             title = { Text("Choose an Avatar", fontFamily = MomotrustFontFamily, fontWeight = FontWeight.Bold) },
             text = {
                 LazyVerticalGrid(
@@ -169,7 +144,7 @@ fun ProfileHeaderCard(
                         .clip(CircleShape)
                         .background(Color(0xFFF1F3F5))
                         .border(4.dp, WestconYellow, CircleShape)
-                        .padding(4.dp) // Gap between border and icon
+                        .padding(4.dp)
                         .clickable(enabled = isOwnProfile) { showIconPicker = true },
                     contentAlignment = Alignment.Center
                 ) {
@@ -299,8 +274,6 @@ fun ProfileHeaderCard(
     }
 }
 
-// --- Section Components ---
-
 @Composable
 fun EditableAboutSection(
     isEditing: Boolean,
@@ -375,6 +348,8 @@ fun EditableTeachableSkillsSection(
     onNewSkillChange: (String) -> Unit,
     onAddSkill: () -> Unit,
     onRemoveSkill: (com.example.westcon.data.SkillMastery) -> Unit,
+    onRateClick: () -> Unit = {},
+    showRateOption: Boolean = false,
     onEditClick: () -> Unit,
     onSaveClick: () -> Unit,
     onCancelClick: () -> Unit
@@ -400,6 +375,12 @@ fun EditableTeachableSkillsSection(
                         }
                     } else {
                         IconButton(onClick = onEditClick) { Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp)) }
+                    }
+                } else if (showRateOption) {
+                    TextButton(onClick = onRateClick, colors = ButtonDefaults.textButtonColors(contentColor = WestconYellow)) {
+                        Icon(Icons.Default.Stars, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Rate Session", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -455,7 +436,19 @@ fun EditableTeachableSkillsSection(
                                     val ratingText = if (skill.totalRatings > 0) String.format("%.1f", skill.averageRating) else "New"
                                     Text(ratingText, color = WestconYellow, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.width(12.dp))
-                                    MasteryBadgeSmall(skill.level)
+                                    Text(
+                                        when(skill.level) {
+                                            1 -> "Novice"
+                                            2 -> "Intermediate"
+                                            3 -> "Advanced"
+                                            4 -> "Expert"
+                                            5 -> "Guru"
+                                            else -> "Novice"
+                                        },
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        fontSize = 11.sp,
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                    )
                                 }
                             }
                         }
@@ -580,7 +573,6 @@ fun EditableLearningSkillsSection(
     }
 }
 
-// --- Main Screen ---
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
@@ -593,7 +585,8 @@ fun ProfileScreen(
     var userProfile by remember { mutableStateOf<UserProfile?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
-    val currentUid = FirebaseManager.getCurrentUser()?.uid
+    val context = LocalContext.current
+    val currentUid = FirebaseManager.getCurrentUser()?.uid ?: ""
     val isOwnProfile = userId == null || userId == currentUid
 
     var isEditingAbout by remember { mutableStateOf(false) }
@@ -605,9 +598,27 @@ fun ProfileScreen(
     val editLearningSkills = remember { mutableStateListOf<LearningSkill>() }
     var newLearningSkill by remember { mutableStateOf("") }
 
+    val targetUid = userId ?: currentUid
+    val exchangeFlow = remember(currentUid, targetUid) { 
+        if (!isOwnProfile && targetUid.isNotBlank()) {
+            FirebaseManager.getRelevantExchangeFlow(currentUid, targetUid)
+        } else {
+            kotlinx.coroutines.flow.flowOf(null)
+        }
+    }
+    val relevantExchange by exchangeFlow.collectAsState(initial = null)
+    
+    var showRateDialog by remember { mutableStateOf(false) }
+    var showConfirmRating by remember { mutableStateOf(false) }
+    var isSubmittingRating by remember { mutableStateOf(false) }
+    
+    var ratingForTheirTeaching by remember { mutableDoubleStateOf(5.0) }
+    var ratingForTheirLearning by remember { mutableDoubleStateOf(5.0) }
+    var skillTheyTaughtName by remember { mutableStateOf("") }
+    var skillTheyLearnedName by remember { mutableStateOf("") }
+
     LaunchedEffect(userId) {
-        val targetUid = userId ?: currentUid
-        if (targetUid != null) {
+        if (targetUid.isNotBlank()) {
             val profile = FirebaseManager.getUserProfile(targetUid)
             userProfile = profile
             if (profile != null) {
@@ -621,6 +632,65 @@ fun ProfileScreen(
         isLoading = false
     }
 
+    // Confirmation Dialog
+    if (showConfirmRating) {
+        AlertDialog(
+            onDismissRequest = { if (!isSubmittingRating) showConfirmRating = false },
+            containerColor = Color.White,
+            title = { Text("Submit Feedback", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
+            text = { 
+                Column {
+                    Text("Ready to submit your feedback for ${userProfile?.name}?")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Teaching proficiency ($skillTheyTaughtName):", fontSize = 11.sp, color = Color.Gray)
+                    Text("$ratingForTheirTeaching / 5.0 Stars", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = WestconDarkBlue)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Learning progress ($skillTheyLearnedName):", fontSize = 11.sp, color = Color.Gray)
+                    Text("$ratingForTheirLearning / 5.0 Stars", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = WestconDarkBlue)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("This action is final and cannot be changed.", fontWeight = FontWeight.Bold, color = Color.Red, fontSize = 11.sp)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isSubmittingRating = true
+                        scope.launch {
+                            val result = FirebaseManager.submitExchangeRating(
+                                exchangeId = relevantExchange?.id ?: "",
+                                targetUid = targetUid,
+                                teachingRating = ratingForTheirTeaching,
+                                learningRating = ratingForTheirLearning,
+                                taughtSkillName = skillTheyTaughtName,
+                                learnedSkillName = skillTheyLearnedName
+                            )
+                            isSubmittingRating = false
+                            showConfirmRating = false
+                            if (result.isSuccess) {
+                                Toast.makeText(context, "Feedback submitted successfully!", Toast.LENGTH_SHORT).show()
+                                showRateDialog = false
+                            } else {
+                                val errorMsg = result.exceptionOrNull()?.message ?: "Failed to submit feedback"
+                                Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                                if (errorMsg.contains("Already rated")) showRateDialog = false
+                            }
+                        }
+                    },
+                    enabled = !isSubmittingRating,
+                    colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)
+                ) {
+                    if (isSubmittingRating) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Text("Confirm & Submit")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmRating = false }, enabled = !isSubmittingRating) {
+                    Text("Go Back", color = Color.Gray)
+                }
+            }
+        )
+    }
+
     if (isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = WestconDarkBlue, strokeWidth = 3.dp)
@@ -632,7 +702,7 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Failed to load profile", color = Color.Gray, fontFamily = MomotrustFontFamily)
                 Spacer(modifier = Modifier.height(24.dp))
-                Button(onClick = onLogoutClick, colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)) { 
+                Button(onClick = { onBackClick?.invoke() ?: onLogoutClick() }, colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)) { 
                     Text("Go Back") 
                 }
             }
@@ -663,17 +733,15 @@ fun ProfileScreen(
             onRefresh = {
                 isRefreshing = true
                 scope.launch {
-                    val targetUid = userId ?: currentUid
-                    if (targetUid != null) {
+                    if (targetUid.isNotBlank()) {
                         userProfile = FirebaseManager.getUserProfile(targetUid)
                     }
-                    kotlinx.coroutines.delay(1000)
+                    delay(1000)
                     isRefreshing = false
                 }
             }
         ) {
             Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF8F9FA))) {
-                // Gradient Header
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -714,6 +782,10 @@ fun ProfileScreen(
                     }
 
                     item {
+                        val alreadyRated = if (relevantExchange != null) {
+                            if (currentUid == relevantExchange?.requesterUid) relevantExchange!!.requesterRated else relevantExchange!!.responderRated
+                        } else true
+
                         EditableTeachableSkillsSection(
                             isEditing = isEditingTeachableSkills && isOwnProfile,
                             isOwnProfile = isOwnProfile,
@@ -727,6 +799,8 @@ fun ProfileScreen(
                                 }
                             },
                             onRemoveSkill = { editTeachableSkills.remove(it) },
+                            showRateOption = !isOwnProfile && relevantExchange != null && !alreadyRated,
+                            onRateClick = { showRateDialog = true },
                             onEditClick = { isEditingTeachableSkills = true },
                             onSaveClick = { saveProfile() },
                             onCancelClick = {
@@ -750,17 +824,20 @@ fun ProfileScreen(
                                     newLearningSkill = ""
                                 }
                             },
-                            onRemoveSkill = { editLearningSkills.remove(it) },
+                            onRemoveSkill = { skill ->
+                                if (skill.rating > 0) {
+                                    editLearningSkills.remove(skill)
+                                } else {
+                                    Toast.makeText(context, "Skill must be rated before deletion", Toast.LENGTH_SHORT).show()
+                                }
+                            },
                             onMarkDone = { skill ->
                                 val idx = editLearningSkills.indexOf(skill)
                                 if (idx != -1) {
                                     scope.launch {
-                                        // 1. Mark in profile
                                         editLearningSkills[idx] = skill.copy(isDone = true)
                                         saveProfile()
-                                        
-                                        // 2. Mark in exchange if available
-                                        if (skill.exchangeId != null && currentUid != null) {
+                                        if (skill.exchangeId != null) {
                                             FirebaseManager.markExchangeDone(skill.exchangeId, currentUid)
                                         }
                                     }
@@ -818,7 +895,6 @@ fun ProfileScreen(
                     }
                 }
 
-                // Top Bar with Back Button (Drawn last to float on top)
                 if (onBackClick != null) {
                     Box(
                         modifier = Modifier
@@ -858,5 +934,29 @@ fun ProfileScreen(
                 }
             }
         }
+    }
+
+    if (showRateDialog && relevantExchange != null) {
+        RateUserDialog(
+            otherUserName = userProfile?.name ?: "",
+            exchange = relevantExchange!!,
+            currentUid = currentUid,
+            onDismiss = { showRateDialog = false },
+            onRateSubmitted = { tRating, lRating, tSkill, lSkill ->
+                ratingForTheirTeaching = tRating
+                ratingForTheirLearning = lRating
+                skillTheyTaughtName = tSkill
+                skillTheyLearnedName = lSkill
+                showConfirmRating = true
+            },
+            onMarkDone = {
+                scope.launch {
+                    val res = FirebaseManager.markExchangeDone(relevantExchange!!.id, currentUid)
+                    if (res.isSuccess) {
+                        Toast.makeText(context, "Session marked as complete!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
     }
 }

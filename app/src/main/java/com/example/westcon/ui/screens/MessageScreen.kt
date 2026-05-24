@@ -32,7 +32,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun MessageScreen(onMessageClick: (String, String, String) -> Unit = { _, _, _ -> }) {
-    val chatSummaries by com.example.westcon.data.FirebaseManager.getChatSummaries().collectAsState(initial = emptyList())
+    val summariesFlow = remember { com.example.westcon.data.FirebaseManager.getChatSummaries() }
+    val chatSummaries by summariesFlow.collectAsState(initial = emptyList())
     
     LaunchedEffect(chatSummaries) {
         android.util.Log.d("MessageScreen", "chatSummaries updated: size=${chatSummaries.size}")
@@ -71,11 +72,7 @@ fun MessageScreen(onMessageClick: (String, String, String) -> Unit = { _, _, _ -
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(WestconDarkBlue, Color(0xFF002244))
-                            )
-                        )
+                        .background(WestconDarkBlue)
                         .padding(top = 20.dp, bottom = 28.dp)
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 24.dp)) {

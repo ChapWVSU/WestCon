@@ -17,9 +17,12 @@ import androidx.compose.ui.unit.sp
 import com.example.westcon.ui.theme.*
 import kotlinx.coroutines.launch
 import com.example.westcon.data.FirebaseManager
+import com.example.westcon.ui.SignUpTextField
+import com.example.westcon.ui.FooterSection
+import kotlinx.coroutines.delay
 
 @Composable
-fun LoginScreen(onBackClick: () -> Unit, onLoginSuccess: () -> Unit) {
+fun LoginScreen(onLoginSuccess: () -> Unit, onSignUpClick: () -> Unit, onBackClick: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -27,7 +30,6 @@ fun LoginScreen(onBackClick: () -> Unit, onLoginSuccess: () -> Unit) {
     val scope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Background Image
         Image(
             painter = painterResource(id = R.drawable.bg_login),
             contentDescription = null,
@@ -68,13 +70,13 @@ fun LoginScreen(onBackClick: () -> Unit, onLoginSuccess: () -> Unit) {
                 Text(errorMessage!!, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp))
             }
 
-            Spacer(modifier = Modifier.height(30.dp))
+            Spacer(modifier = Modifier.height(0.dp))
 
-            // Text Fields
+            // Fields
             SignUpTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = "Email",
+                label = "WVSU email",
                 icon = R.drawable.email
             )
 
@@ -84,29 +86,46 @@ fun LoginScreen(onBackClick: () -> Unit, onLoginSuccess: () -> Unit) {
                 label = "Password",
                 icon = R.drawable.lock,
                 isPassword = true,
-                showEyeIcon = true // Adds the eye icon from your secret.xml
+                showEyeIcon = true
             )
 
+            // Forgot Password Section
             var showForgotDialog by remember { mutableStateOf(false) }
             var resetEmail by remember { mutableStateOf("") }
             var isResetting by remember { mutableStateOf(false) }
             var resetMessage by remember { mutableStateOf<String?>(null) }
+            var resetCooldown by remember { mutableIntStateOf(0) }
+
+            LaunchedEffect(resetCooldown) {
+                if (resetCooldown > 0) {
+                    delay(1000)
+                    resetCooldown--
+                }
+            }
 
             if (showForgotDialog) {
                 AlertDialog(
-                    onDismissRequest = { showForgotDialog = false },
+                    onDismissRequest = { if (!isResetting) showForgotDialog = false },
                     containerColor = Color.White,
                     title = { Text("Reset Password", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
                     text = {
                         Column {
-                            Text("Enter your WVSU email to receive a password reset link.", fontSize = 14.sp)
+                            Text("Enter your WVSU email to receive a password reset link.", fontSize = 14.sp, color = Color.DarkGray)
                             Spacer(modifier = Modifier.height(16.dp))
                             OutlinedTextField(
                                 value = resetEmail,
                                 onValueChange = { resetEmail = it },
-                                placeholder = { Text("email@wvsu.edu.ph") },
+                                placeholder = { Text("email@wvsu.edu.ph", color = Color.Gray.copy(alpha = 0.5f)) },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = WestconDarkBlue,
+                                    unfocusedTextColor = WestconDarkBlue,
+                                    focusedBorderColor = WestconDarkBlue,
+                                    unfocusedBorderColor = Color.LightGray
+                                ),
+                                singleLine = true,
+                                enabled = !isResetting
                             )
                             if (resetMessage != null) {
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -126,21 +145,22 @@ fun LoginScreen(onBackClick: () -> Unit, onLoginSuccess: () -> Unit) {
                                     val result = FirebaseManager.sendPasswordResetEmail(resetEmail)
                                     isResetting = false
                                     if (result.isSuccess) {
-                                        resetMessage = "Reset password email sent via Firebase Authentication."
+                                        resetMessage = "Reset password email sent! Please check your inbox and spam folder."
+                                        resetCooldown = 60
                                     } else {
                                         resetMessage = result.exceptionOrNull()?.message ?: "Failed to send reset email"
                                     }
                                 }
                             },
-                            enabled = !isResetting,
+                            enabled = !isResetting && resetCooldown == 0,
                             colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)
                         ) {
                             if (isResetting) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = WestconYellow)
-                            else Text("Send Reset Link", color = WestconYellow)
+                            else Text(if (resetCooldown > 0) "Resend in ${resetCooldown}s" else "Send Reset Link", color = WestconYellow)
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showForgotDialog = false; resetMessage = null }) {
+                        TextButton(onClick = { showForgotDialog = false; resetMessage = null }, enabled = !isResetting) {
                             Text("Cancel", color = Color.Gray)
                         }
                     }
@@ -150,27 +170,22 @@ fun LoginScreen(onBackClick: () -> Unit, onLoginSuccess: () -> Unit) {
             // Forgot Password Link
             TextButton(
                 onClick = { showForgotDialog = true },
-                contentPadding = PaddingValues(0.dp)
+                modifier = Modifier.align(Alignment.End)
             ) {
                 Text(
-                    text = "Forgot password?",
+                    "Forgot password?",
                     color = Color.White.copy(alpha = 0.8f),
-                    fontFamily = MomotrustFontFamily,
-                    fontSize = 14.sp
+                    fontSize = 12.sp,
+                    fontFamily = MomotrustFontFamily
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Enter Button
             Button(
                 onClick = {
                     if (email.isEmpty() || password.isEmpty()) {
                         errorMessage = "Please fill all fields"
-                        return@Button
-                    }
-                    if (!email.endsWith("@wvsu.edu.ph")) {
-                        errorMessage = "Please use your WVSU email (@wvsu.edu.ph)"
                         return@Button
                     }
                     isLoading = true
@@ -179,14 +194,17 @@ fun LoginScreen(onBackClick: () -> Unit, onLoginSuccess: () -> Unit) {
                         val result = FirebaseManager.login(email, password)
                         isLoading = false
                         if (result.isSuccess) {
-                            onLoginSuccess()
+                            if (FirebaseManager.isEmailVerified()) {
+                                onLoginSuccess()
+                            } else {
+                                errorMessage = "Email not verified. Please check your inbox and spam folder."
+                                FirebaseManager.logout()
+                            }
                         } else {
                             val exception = result.exceptionOrNull()
                             errorMessage = when {
-                                exception?.message?.contains("invalid-credential") == true || 
-                                exception?.message?.contains("wrong password") == true ||
-                                exception?.message?.contains("no user record") == true -> 
-                                    "Invalid email or password"
+                                exception?.message?.contains("invalid-credential") == true -> "Invalid email or password"
+                                exception?.message?.contains("user-not-found") == true -> "Account not found"
                                 else -> exception?.message ?: "Login failed"
                             }
                         }
@@ -202,23 +220,30 @@ fun LoginScreen(onBackClick: () -> Unit, onLoginSuccess: () -> Unit) {
                 if (isLoading) {
                     CircularProgressIndicator(color = WestconYellow, modifier = Modifier.size(24.dp))
                 } else {
-                    Text(
-                        "Enter WESTCON",
-                        color = WestconYellow,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = MomotrustFontFamily
-                    )
+                    Text("Login", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
                 }
             }
 
-            // Go Back Button (To return to Landing)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Sign Up link
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Don't have an account?", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, fontFamily = MomotrustFontFamily)
+                TextButton(onClick = onSignUpClick) {
+                    Text("Sign Up", color = WestconYellow, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
+                }
+            }
+            
             TextButton(
                 onClick = onBackClick,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
                 Text(
-                    "Go Back",
+                    "Go Back", 
                     color = Color.White.copy(alpha = 0.6f),
                     fontFamily = MomotrustFontFamily
                 )

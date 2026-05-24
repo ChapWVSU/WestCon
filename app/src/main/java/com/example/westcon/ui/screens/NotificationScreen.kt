@@ -38,7 +38,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationScreen(onBackClick: () -> Unit) {
-    val notifications by FirebaseManager.getNotifications().collectAsState(initial = emptyList())
+    val notificationsFlow = remember { FirebaseManager.getNotifications() }
+    val notifications by notificationsFlow.collectAsState(initial = emptyList())
     var selectedFilter by remember { mutableStateOf("All") }
     var isLoading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()

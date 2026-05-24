@@ -19,6 +19,8 @@ import com.example.westcon.ui.theme.*
 import kotlinx.coroutines.launch
 import com.example.westcon.data.FirebaseManager
 import com.example.westcon.data.UserProfile
+import com.example.westcon.ui.SignUpTextField
+import com.example.westcon.ui.FooterSection
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import com.example.westcon.ui.UIUtils
+import kotlinx.coroutines.delay
 
 @Composable
 fun SignUpStepTwoScreen(
@@ -55,6 +58,14 @@ fun SignUpStepTwoScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
+    var resendCooldown by remember { mutableIntStateOf(0) }
+    LaunchedEffect(resendCooldown) {
+        if (resendCooldown > 0) {
+            delay(1000)
+            resendCooldown--
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
             painter = painterResource(id = R.drawable.bg_login),
@@ -73,7 +84,7 @@ fun SignUpStepTwoScreen(
         ) {
             // App Icon Branding
             Icon(
-                painter = painterResource(id = com.example.westcon.R.drawable.icon),
+                painter = painterResource(id = R.drawable.icon),
                 contentDescription = null,
                 tint = WestconYellow,
                 modifier = Modifier.size(110.dp).offset(x = (-10).dp)
@@ -287,7 +298,7 @@ fun SignUpStepTwoScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .       verticalScroll(rememberScrollState())
+                        .verticalScroll(rememberScrollState())
                 ) {
                     Text(
                         text = "Please confirm\nyour details",
@@ -342,7 +353,13 @@ fun SignUpStepTwoScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     if (errorMessage != null) {
-                        Text(errorMessage!!, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                        val isSuccess = errorMessage!!.contains("successful")
+                        Text(
+                            errorMessage!!, 
+                            color = if (isSuccess) Color(0xFF4CAF50) else Color.Red, 
+                            fontSize = 12.sp, 
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
                     }
 
                     Button(
@@ -350,45 +367,28 @@ fun SignUpStepTwoScreen(
                             isLoading = true
                             errorMessage = null
                             scope.launch {
-                                // 1. Create the account in Firebase Auth
-                                val authResult = FirebaseManager.signUp(email, password)
-                                if (authResult.isSuccess) {
-                                    val uid = authResult.getOrThrow()
-                                    
-                                    // 2. Create the Firestore profile
-                                    val finalSkillsToSave = selectedSkills.toMutableList()
-                                    if (showOtherField && otherSkill.isNotBlank()) {
-                                        finalSkillsToSave.add(otherSkill.trim())
-                                    }
+                                val finalSkillsToSave = selectedSkills.toMutableList()
+                                if (showOtherField && otherSkill.isNotBlank()) {
+                                    finalSkillsToSave.add(otherSkill.trim())
+                                }
 
-                                    val profile = UserProfile(
-                                        uid = uid,
-                                        name = username,
-                                        email = email,
-                                        profileIconName = selectedIcon,
-                                        department = college,
-                                        course = program,
-                                        year = year,
-                                        skillsToTeach = finalSkillsToSave.map { com.example.westcon.data.SkillMastery(skillName = it) }
-                                    )
-                                    
-                                    val profileResult = FirebaseManager.saveUserProfile(profile)
-                                    isLoading = false
-                                    if (profileResult.isSuccess) {
-                                        onNextClick()
-                                    } else {
-                                        errorMessage = profileResult.exceptionOrNull()?.message ?: "Failed to save profile"
-                                    }
+                                val profile = UserProfile(
+                                    uid = FirebaseManager.getCurrentUser()?.uid ?: "",
+                                    name = username,
+                                    email = email,
+                                    profileIconName = selectedIcon,
+                                    department = college,
+                                    course = program,
+                                    year = year,
+                                    skillsToTeach = finalSkillsToSave.map { com.example.westcon.data.SkillMastery(skillName = it) }
+                                )
+                                
+                                val profileResult = FirebaseManager.saveUserProfile(profile)
+                                isLoading = false
+                                if (profileResult.isSuccess) {
+                                    onNextClick()
                                 } else {
-                                    isLoading = false
-                                    val exception = authResult.exceptionOrNull()
-                                    errorMessage = when {
-                                        exception?.message?.contains("email address is already in use") == true -> 
-                                            "This email is already registered"
-                                        exception?.message?.contains("badly formatted") == true ->
-                                            "Invalid email format"
-                                        else -> exception?.message ?: "Signup failed"
-                                    }
+                                    errorMessage = "Failed to save profile: ${profileResult.exceptionOrNull()?.message}"
                                 }
                             }
                         },

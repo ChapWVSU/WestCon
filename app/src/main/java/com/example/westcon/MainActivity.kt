@@ -24,9 +24,11 @@ class MainActivity : FragmentActivity() {
         setContentView(R.layout.activity_main)
 
         if (savedInstanceState == null) {
-            val startFragment = if (FirebaseManager.isUserLoggedIn()) {
+            val startFragment = if (FirebaseManager.isUserLoggedIn() && FirebaseManager.isEmailVerified()) {
                 DashboardFragment()
             } else {
+                // If logged in but not verified, log out to be safe
+                if (FirebaseManager.isUserLoggedIn()) FirebaseManager.logout()
                 OnboardingFragment()
             }
             supportFragmentManager.commit {

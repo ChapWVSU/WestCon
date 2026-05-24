@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,7 +53,8 @@ fun DashboardScreen(
     var showPostFreedomDialog by remember { mutableStateOf(false) }
     var skillToExchange by remember { mutableStateOf<com.example.westcon.data.SkillPost?>(null) }
     
-    val notifications by FirebaseManager.getNotifications().collectAsState(initial = emptyList())
+    val notificationsFlow = remember { FirebaseManager.getNotifications() }
+    val notifications by notificationsFlow.collectAsState(initial = emptyList())
     val hasUnread = notifications.any { !it.isActuallyRead }
 
     Scaffold(
@@ -70,7 +73,9 @@ fun DashboardScreen(
                 hasNotifications = hasUnread
             ) 
         },
-        bottomBar = { DashboardBottomNav(selectedTab) { selectedTab = it } },
+        bottomBar = { 
+            DashboardBottomNav(selectedTab) { selectedTab = it }
+        },
         floatingActionButton = {
             if (selectedTab == 0 || selectedTab == 1) {
                 FloatingActionButton(
@@ -97,7 +102,13 @@ fun DashboardScreen(
                 )
                 1 -> FreedomWallScreen(onProfileClick = onProfileClick)
                 2 -> MessageScreen(onMessageClick = onMessageClick)
-                3 -> ProfileScreen(onLogoutClick = onLogoutClick)
+                3 -> ProfileScreen(onLogoutClick = onLogoutClick, onMessageClick = { uid, name ->
+                    val currentUid = FirebaseManager.getCurrentUser()?.uid ?: ""
+                    val chatId = if (currentUid < uid) "${currentUid}_$uid" else "${uid}_$currentUid"
+                    onMessageClick(chatId, name, uid)
+                }, onExchangeClick = { targetUid ->
+                    // Exchange initiation handled via marketplace
+                })
                 else -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("Screen $selectedTab Coming Soon", fontFamily = MomotrustFontFamily)
@@ -132,7 +143,7 @@ fun DashboardScreen(
                     onDismissRequest = { skillToExchange = null },
                     containerColor = White,
                     title = { Text("Active Exchange Found", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
-                    text = { Text("You already have an active exchange with ${skillToExchange!!.authorName}. Please mark it as done before starting a new one.") },
+                    text = { Text("You already have an active exchange with ${skillToExchange!!.authorName}. Please complete or rate it before starting a new one.") },
                     confirmButton = {
                         Button(onClick = { skillToExchange = null }, colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)) {
                             Text("Got it")
@@ -149,147 +160,13 @@ fun DashboardScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun ExchangeDialog(targetPost: com.example.westcon.data.SkillPost, onDismiss: () -> Unit) {
-    var offeredSkill by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var userProfile by remember { mutableStateOf<com.example.westcon.data.UserProfile?>(null) }
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(Unit) {
-        val currentUser = FirebaseManager.getCurrentUser()
-        if (currentUser != null) {
-            userProfile = FirebaseManager.getUserProfile(currentUser.uid)
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = White,
-        title = { Text("Exchange Skills", fontWeight = FontWeight.Bold, color = WestconDarkBlue, fontFamily = MomotrustFontFamily) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "You want to learn '${targetPost.title}' from ${targetPost.authorName}.",
-                    fontSize = 14.sp,
-                    color = Color.DarkGray
-                )
-                
-                if (userProfile != null && userProfile!!.skillsToTeach.isNotEmpty()) {
-                    Text("Choose from your skills:", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        userProfile!!.skillsToTeach.forEach { skill ->
-                            val isSelected = offeredSkill.equals(skill.skillName, ignoreCase = true)
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { offeredSkill = skill.skillName },
-                                label = { Text(skill.skillName, fontSize = 12.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = WestconYellow,
-                                    selectedLabelColor = WestconDarkBlue,
-                                    containerColor = Color(0xFFF1F5F9),
-                                    labelColor = Color.Gray
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    enabled = true,
-                                    selected = isSelected,
-                                    borderColor = Color.Transparent,
-                                    selectedBorderColor = WestconYellow
-                                ),
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                OutlinedTextField(
-                    value = offeredSkill,
-                    onValueChange = { offeredSkill = it },
-                    label = { Text("Or type a new skill to teach") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = WestconDarkBlue,
-                        unfocusedTextColor = WestconDarkBlue,
-                        focusedBorderColor = WestconDarkBlue,
-                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f)
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (offeredSkill.isNotBlank()) {
-                        isLoading = true
-                        scope.launch {
-                            val currentUser = FirebaseManager.getCurrentUser()
-                            val profile = userProfile ?: (currentUser?.let { FirebaseManager.getUserProfile(it.uid) })
-                            
-                            // SYNC LOGIC: Check if this skill exists on profile
-                            val existingSkill = profile?.skillsToTeach?.find { it.skillName.equals(offeredSkill.trim(), ignoreCase = true) }
-                            
-                            // If new skill, add to profile automatically
-                            if (existingSkill == null && profile != null) {
-                                val updatedSkills = profile.skillsToTeach.toMutableList().apply {
-                                    add(com.example.westcon.data.SkillMastery(skillName = offeredSkill.trim(), level = 1))
-                                }
-                                FirebaseManager.saveUserProfile(profile.copy(skillsToTeach = updatedSkills))
-                            }
-
-                            val notification = com.example.westcon.data.Notification(
-                                receiverUid = targetPost.authorUid,
-                                type = "SKILL_EXCHANGE",
-                                title = "New Exchange Request",
-                                content = "${profile?.name ?: "Someone"} wants to exchange skills!",
-                                senderUid = currentUser?.uid,
-                                senderName = profile?.name,
-                                senderIconName = profile?.profileIconName ?: "Person",
-                                senderDept = profile?.department,
-                                skillOffered = offeredSkill.trim(),
-                                skillWanted = targetPost.title
-                            )
-                            
-                            FirebaseManager.sendNotification(notification)
-                            isLoading = false
-                            onDismiss()
-                        }
-                    }
-                },
-                enabled = !isLoading && offeredSkill.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = WestconDarkBlue,
-                    contentColor = Color.White,
-                    disabledContainerColor = WestconDarkBlue.copy(alpha = 0.5f),
-                    disabledContentColor = Color.White.copy(alpha = 0.5f)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                else Text("Send Request", fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { 
-                Text("Cancel", color = Color.Gray) 
-            }
-        }
-    )
-}
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PostSkillDialog(onDismiss: () -> Unit) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("Technology") }
+    var postType by remember { mutableStateOf("SHARE") } // "SHARE" or "FIND"
     var isLoading by remember { mutableStateOf(false) }
     var userProfile by remember { mutableStateOf<com.example.westcon.data.UserProfile?>(null) }
     val scope = rememberCoroutineScope()
@@ -316,7 +193,9 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
             shape = RoundedCornerShape(28.dp)
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 Row(
@@ -325,7 +204,7 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Share a Skill",
+                        if (postType == "SHARE") "Share a Skill" else "Find a Skill",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         color = WestconDarkBlue,
@@ -335,9 +214,42 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
                     }
                 }
+
+                // Post Type Toggle
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .background(Color(0xFFF1F5F9), RoundedCornerShape(12.dp))
+                        .padding(4.dp)
+                ) {
+                    listOf("SHARE" to "Share a Skill", "FIND" to "Find a Skill").forEach { (type, label) ->
+                        val isSelected = postType == type
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) White else Color.Transparent)
+                                .clickable { 
+                                    postType = type
+                                    title = "" 
+                                }
+                                .padding(horizontal = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                label,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) WestconDarkBlue else Color.Gray
+                            )
+                        }
+                    }
+                }
                 
-                // Profile Skills Section
-                if (userProfile != null && userProfile!!.skillsToTeach.isNotEmpty()) {
+                // Profile Skills Section (Only for "SHARE")
+                if (postType == "SHARE" && userProfile != null && userProfile!!.skillsToTeach.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Choose from your skills:", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
                         FlowRow(
@@ -371,11 +283,16 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Skill Title", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
+                    Text(if (postType == "SHARE") "Skill to Teach" else "Skill You're Looking For", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
                     OutlinedTextField(
                         value = title,
                         onValueChange = { if (it.length <= 40) title = it },
-                        placeholder = { Text("e.g. UI/UX Design, Calculus, Guitar", color = Color.Gray.copy(alpha = 0.5f)) },
+                        placeholder = { 
+                            Text(
+                                if (postType == "SHARE") "e.g. UI/UX Design, Calculus, Guitar" else "e.g. React, Next.js, Academic Writing", 
+                                color = Color.Gray.copy(alpha = 0.5f)
+                            ) 
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -446,7 +363,13 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
                     OutlinedTextField(
                         value = description,
                         onValueChange = { if (it.length <= 200) description = it },
-                        placeholder = { Text("Tell us a bit about what you can teach and how you can help others...", color = Color.Gray.copy(alpha = 0.5f)) },
+                        placeholder = { 
+                            Text(
+                                if (postType == "SHARE") "Tell us a bit about what you can teach and how you can help others..." 
+                                else "Tell us a bit about what you want to learn and what help you need...", 
+                                color = Color.Gray.copy(alpha = 0.5f)
+                            ) 
+                        },
                         modifier = Modifier.fillMaxWidth().height(120.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -473,12 +396,10 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
                                 val currentUser = FirebaseManager.getCurrentUser()
                                 val profile = userProfile ?: (currentUser?.let { FirebaseManager.getUserProfile(it.uid) })
                                 
-                                // SYNC LOGIC: Check if this skill exists on profile
-                                val existingSkill = profile?.skillsToTeach?.find { it.skillName.equals(title.trim(), ignoreCase = true) }
+                                val existingSkill = if (postType == "SHARE") profile?.skillsToTeach?.find { it.skillName.equals(title.trim(), ignoreCase = true) } else null
                                 val currentMastery = existingSkill?.level ?: 1
                                 
-                                // If new skill, add to profile automatically
-                                if (existingSkill == null && profile != null) {
+                                if (postType == "SHARE" && existingSkill == null && profile != null) {
                                     val updatedSkills = profile.skillsToTeach.toMutableList().apply {
                                         add(com.example.westcon.data.SkillMastery(skillName = title.trim(), level = 1))
                                     }
@@ -489,11 +410,12 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
                                     authorUid = currentUser?.uid ?: "",
                                     authorName = profile?.name ?: "User",
                                     authorIconName = profile?.profileIconName ?: "Person",
-                                    authorMastery = currentMastery,
+                                    authorMastery = if (postType == "SHARE") currentMastery else 1,
                                     department = profile?.department ?: "WVSU",
                                     category = category,
                                     title = title.trim(),
                                     description = description,
+                                    postType = postType,
                                     anonymous = false
                                 )
                                 
@@ -514,7 +436,7 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = White, strokeWidth = 2.dp)
                     } else {
-                        Text("Post Skill Listing", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(if (postType == "SHARE") "Post to Share" else "Post to Find", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 }
             }
@@ -529,18 +451,20 @@ fun HomeFeed(
     onMessageClick: (String, String, String) -> Unit = { _, _, _ -> },
     onProfileClick: (String) -> Unit = {}
 ) {
-    val posts by FirebaseManager.getSkillPosts().collectAsState(initial = emptyList())
+    val postsFlow = remember { FirebaseManager.getSkillPosts() }
+    val posts by postsFlow.collectAsState(initial = emptyList())
     val currentUid = FirebaseManager.getCurrentUser()?.uid
     var selectedCategory by remember { mutableStateOf("All Skills") }
+    var filterType by remember { mutableStateOf("ALL") } // "ALL", "SHARE", "FIND"
     var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    val filteredPosts = remember(posts, selectedCategory) {
+    val filteredPosts = remember(posts, selectedCategory, filterType) {
         posts.filterNot { it.authorName.contains("Chris Daniel Apin", ignoreCase = true) }
             .filter { selectedCategory == "All Skills" || it.category == selectedCategory }
+            .filter { filterType == "ALL" || it.postType == filterType }
     }
     
-    // Extract trending categories
     val trendingCategories = filteredPosts.groupBy { it.category }
         .map { it.key to it.value.size }
         .sortedByDescending { it.second }
@@ -552,7 +476,7 @@ fun HomeFeed(
         onRefresh = {
             isRefreshing = true
             scope.launch {
-                kotlinx.coroutines.delay(1500) // Simulate refresh
+                kotlinx.coroutines.delay(1500)
                 isRefreshing = false
             }
         }
@@ -568,6 +492,8 @@ fun HomeFeed(
                 item {
                     TrendingSection(
                         categories = trendingCategories,
+                        selectedFilterType = filterType,
+                        onFilterTypeChange = { filterType = it },
                         onCategoryClick = { selectedCategory = it }
                     )
                 }
@@ -632,24 +558,60 @@ fun HomeFeed(
 @Composable
 fun TrendingSection(
     categories: List<String>,
+    selectedFilterType: String,
+    onFilterTypeChange: (String) -> Unit,
     onCategoryClick: (String) -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Default.TrendingUp,
-                contentDescription = null,
-                tint = WestconYellow,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                "Trending Categories",
-                color = WestconDarkBlue,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = MomotrustFontFamily
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.TrendingUp,
+                    contentDescription = null,
+                    tint = WestconYellow,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Trending Categories",
+                    color = WestconDarkBlue,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = MomotrustFontFamily
+                )
+            }
+            
+            // Share/Find Filter
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White)
+                    .border(1.dp, Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                    .padding(2.dp)
+            ) {
+                listOf("ALL" to "All", "SHARE" to "Share", "FIND" to "Find").forEach { (type, label) ->
+                    val isSelected = selectedFilterType == type
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isSelected) WestconDarkBlue else Color.Transparent)
+                            .clickable { onFilterTypeChange(type) }
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            label,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) White else Color.Gray
+                        )
+                    }
+                }
+            }
         }
         Spacer(modifier = Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -709,7 +671,7 @@ fun DashboardTopBar(
     hasNotifications: Boolean = false
 ) {
     Surface(
-        color = White,
+        color = WestconDarkBlue,
         shadowElevation = 4.dp
     ) {
         Row(
@@ -725,14 +687,14 @@ fun DashboardTopBar(
                     Icon(
                         painter = painterResource(id = com.example.westcon.R.drawable.icon),
                         contentDescription = null,
-                        tint = WestconYellow,
+                        tint = White,
                         modifier = Modifier.size(36.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
                 Text(
                     title,
-                    color = WestconDarkBlue,
+                    color = White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = MomotrustFontFamily
@@ -743,7 +705,7 @@ fun DashboardTopBar(
                     Icon(
                         Icons.Default.Search,
                         contentDescription = "Search",
-                        tint = WestconDarkBlue,
+                        tint = White,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -752,7 +714,7 @@ fun DashboardTopBar(
                         Icon(
                             Icons.Default.Notifications,
                             contentDescription = "Notifications",
-                            tint = WestconDarkBlue,
+                            tint = White,
                             modifier = Modifier.size(24.dp)
                         )
                         if (hasNotifications) {
@@ -762,7 +724,7 @@ fun DashboardTopBar(
                                     .clip(CircleShape)
                                     .background(Color.Red)
                                     .align(Alignment.TopEnd)
-                                    .border(1.dp, Color.White, CircleShape)
+                                    .border(1.dp, WestconDarkBlue, CircleShape)
                             )
                         }
                     }
@@ -976,13 +938,22 @@ fun SkillPostCard(
                     color = WestconYellow.copy(alpha = 0.15f),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text(
-                        post.category,
-                        color = Color(0xFF92400E),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (post.postType == "FIND") "FINDING" else "SHARING",
+                            color = WestconDarkBlue,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 10.dp, top = 5.dp, bottom = 5.dp)
+                        )
+                        Text(
+                            " • ${post.category}",
+                            color = Color(0xFF92400E),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.padding(end = 10.dp, top = 5.dp, bottom = 5.dp)
+                        )
+                    }
                 }
             }
             
@@ -997,9 +968,10 @@ fun SkillPostCard(
                 lineHeight = 24.sp
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            MasteryBadge(post.authorMastery)
+            if (post.postType == "SHARE") {
+                Spacer(modifier = Modifier.height(8.dp))
+                MasteryBadge(post.authorMastery)
+            }
             
             Spacer(modifier = Modifier.height(12.dp))
             
@@ -1021,9 +993,9 @@ fun SkillPostCard(
                         shape = RoundedCornerShape(14.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp)
                     ) {
-                        Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.White)
+                        Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(20.dp), tint = White)
                         Spacer(Modifier.width(8.dp))
-                        Text("Exchange", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text("Exchange", color = White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     }
                     
                     OutlinedButton(
@@ -1070,7 +1042,7 @@ fun SkillPostCard(
 @Composable
 fun DashboardBottomNav(selectedTab: Int, onTabSelected: (Int) -> Unit) {
     NavigationBar(
-        containerColor = Color.White,
+        containerColor = WestconDarkBlue,
         tonalElevation = 8.dp
     ) {
         val items = listOf(
@@ -1087,10 +1059,10 @@ fun DashboardBottomNav(selectedTab: Int, onTabSelected: (Int) -> Unit) {
                 icon = { Icon(icon, contentDescription = label) },
                 label = { Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = WestconDarkBlue,
-                    unselectedIconColor = Color.Gray,
-                    selectedTextColor = WestconDarkBlue,
-                    unselectedTextColor = Color.Gray,
+                    selectedIconColor = WestconYellow,
+                    unselectedIconColor = White.copy(alpha = 0.5f),
+                    selectedTextColor = WestconYellow,
+                    unselectedTextColor = White.copy(alpha = 0.5f),
                     indicatorColor = Color.Transparent
                 )
             )

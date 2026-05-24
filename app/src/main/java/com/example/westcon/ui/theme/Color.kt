@@ -1,4 +1,4 @@
-    package com.example.westcon.ui.theme
+package com.example.westcon.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

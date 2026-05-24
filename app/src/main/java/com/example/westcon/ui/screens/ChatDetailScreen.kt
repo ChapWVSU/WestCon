@@ -6,11 +6,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,16 +19,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.westcon.ui.theme.*
+import android.widget.Toast
 import com.example.westcon.data.*
 import com.example.westcon.ui.UIUtils
 import com.example.westcon.ui.WestconPullToRefresh
+import com.example.westcon.ui.theme.WestconDarkBlue
+import com.example.westcon.ui.theme.WestconYellow
+import com.example.westcon.ui.theme.MomotrustFontFamily
 import com.google.firebase.Timestamp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.ui.text.style.TextAlign
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -39,14 +45,29 @@ fun ChatDetailScreen(
     otherUserName: String,
     onBackClick: () -> Unit
 ) {
-    val messages by FirebaseManager.getMessages(chatId).collectAsState(initial = emptyList())
+    val messagesFlow = remember(chatId) { FirebaseManager.getMessages(chatId) }
+    val messages by messagesFlow.collectAsState(initial = emptyList())
     val currentUser = FirebaseManager.getCurrentUser()
     var otherUserProfile by remember { mutableStateOf<UserProfile?>(null) }
-    var activeExchange by remember { mutableStateOf<SkillExchange?>(null) }
+    
+    val exchangeFlow = remember(currentUser?.uid, otherUserUid) { 
+        FirebaseManager.getRelevantExchangeFlow(currentUser?.uid ?: "", otherUserUid) 
+    }
+    val activeExchange by exchangeFlow.collectAsState(initial = null)
+    
+    var showRateDialog by remember { mutableStateOf(false) }
+    var showConfirmRating by remember { mutableStateOf(false) }
+    var isSubmittingRating by remember { mutableStateOf(false) }
+    
+    var ratingForTheirTeaching by remember { mutableDoubleStateOf(5.0) }
+    var ratingForTheirLearning by remember { mutableDoubleStateOf(5.0) }
+    var skillTheyTaughtName by remember { mutableStateOf("") }
+    var skillTheyLearnedName by remember { mutableStateOf("") }
+
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var messageText by remember { mutableStateOf("") }
-    var showRateDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     // Fetch data and mark as read
     LaunchedEffect(otherUserUid) {
@@ -54,10 +75,71 @@ fun ChatDetailScreen(
             otherUserProfile = FirebaseManager.getUserProfile(otherUserUid)
             FirebaseManager.markChatAsRead(otherUserUid)
             FirebaseManager.markChatMessagesAsRead(chatId)
-            
-            val currentUid = currentUser?.uid ?: ""
-            activeExchange = FirebaseManager.getActiveExchange(currentUid, otherUserUid)
         }
+    }
+
+    // Confirmation Dialog
+    if (showConfirmRating) {
+        AlertDialog(
+            onDismissRequest = { if (!isSubmittingRating) showConfirmRating = false },
+            containerColor = Color.White,
+            title = { Text("Confirm Feedback", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
+            text = { 
+                Column {
+                    Text("Ready to submit your feedback for $otherUserName?")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Teaching proficiency ($skillTheyTaughtName):", fontSize = 11.sp, color = Color.Gray)
+                    Text("$ratingForTheirTeaching / 5.0 Stars", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = WestconDarkBlue)
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text("Learning progress ($skillTheyLearnedName):", fontSize = 11.sp, color = Color.Gray)
+                    Text("$ratingForTheirLearning / 5.0 Stars", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = WestconDarkBlue)
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("This action is final and cannot be changed.", fontWeight = FontWeight.Bold, color = Color.Red, fontSize = 11.sp)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        isSubmittingRating = true
+                        scope.launch {
+                            val result = FirebaseManager.submitExchangeRating(
+                                exchangeId = activeExchange?.id ?: "",
+                                targetUid = otherUserUid,
+                                teachingRating = ratingForTheirTeaching,
+                                learningRating = ratingForTheirLearning,
+                                taughtSkillName = skillTheyTaughtName,
+                                learnedSkillName = skillTheyLearnedName
+                            )
+                            isSubmittingRating = false
+                            showConfirmRating = false
+                            if (result.isSuccess) {
+                                Toast.makeText(context, "Feedback submitted successfully!", Toast.LENGTH_SHORT).show()
+                                showRateDialog = false
+                            } else {
+                                val errorMsg = result.exceptionOrNull()?.message ?: "Failed to submit feedback"
+                                Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                                if (errorMsg.contains("Already rated")) {
+                                    showRateDialog = false
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isSubmittingRating,
+                    colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)
+                ) {
+                    if (isSubmittingRating) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Text("Confirm & Submit")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmRating = false }, enabled = !isSubmittingRating) {
+                    Text("Go Back", color = Color.Gray)
+                }
+            }
+        )
     }
 
     // Auto-scroll to bottom
@@ -135,7 +217,7 @@ fun ChatDetailScreen(
                                 }
                             }
                         }
-                        if (activeExchange != null) {
+                        if (activeExchange != null && activeExchange?.status != "DONE") {
                             Text(
                                 "Exchange: ${activeExchange?.skillWanted} ↔ ${activeExchange?.skillOffered}",
                                 fontSize = 10.sp,
@@ -147,16 +229,19 @@ fun ChatDetailScreen(
                     }
                     
                     if (activeExchange != null) {
-                        IconButton(
-                            onClick = { showRateDialog = true },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Stars, 
-                                contentDescription = "Rate Session", 
-                                tint = WestconYellow,
-                                modifier = Modifier.size(28.dp)
-                            )
+                        val alreadyRated = if (currentUser?.uid == activeExchange?.requesterUid) activeExchange!!.requesterRated else activeExchange!!.responderRated
+                        if (!alreadyRated) {
+                            IconButton(
+                                onClick = { showRateDialog = true },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Stars, 
+                                    contentDescription = "Rate Session", 
+                                    tint = WestconYellow,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -193,8 +278,7 @@ fun ChatDetailScreen(
             onRefresh = {
                 isRefreshing = true
                 scope.launch {
-                    activeExchange = FirebaseManager.getActiveExchange(currentUser?.uid ?: "", otherUserUid)
-                    kotlinx.coroutines.delay(1000)
+                    delay(1000)
                     isRefreshing = false
                 }
             },
@@ -225,12 +309,19 @@ fun ChatDetailScreen(
             exchange = activeExchange!!,
             currentUid = currentUser?.uid ?: "",
             onDismiss = { showRateDialog = false },
-            onRate = { rating, skillName ->
+            onRateSubmitted = { tRating, lRating, tSkill, lSkill ->
+                ratingForTheirTeaching = tRating
+                ratingForTheirLearning = lRating
+                skillTheyTaughtName = tSkill
+                skillTheyLearnedName = lSkill
+                showConfirmRating = true
+            },
+            onMarkDone = {
                 scope.launch {
-                    FirebaseManager.rateUserLearning(otherUserUid, skillName, rating, activeExchange!!.id)
-                    showRateDialog = false
-                    // Refresh exchange info
-                    activeExchange = FirebaseManager.getActiveExchange(currentUser?.uid ?: "", otherUserUid)
+                    val res = FirebaseManager.markExchangeDone(activeExchange!!.id, currentUser?.uid ?: "")
+                    if (res.isSuccess) {
+                        Toast.makeText(context, "Session marked as complete!", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         )
@@ -331,145 +422,6 @@ fun ChatInputBar(
                     contentDescription = "Send", 
                     modifier = Modifier.size(24.dp)
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun RateUserDialog(
-    otherUserName: String,
-    exchange: SkillExchange,
-    currentUid: String,
-    onDismiss: () -> Unit,
-    onRate: (Double, String) -> Unit
-) {
-    var rating by remember { mutableDoubleStateOf(5.0) }
-    
-    // Determine which skill I am teaching the other user
-    val skillITaught = if (exchange.requesterUid == currentUid) exchange.skillOffered else exchange.skillWanted
-    
-    // Check if other user has marked it as done
-    val otherUserMarkedDone = if (exchange.requesterUid == currentUid) exchange.responderMarkedDone else exchange.requesterMarkedDone
-    
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .wrapContentHeight(),
-            shape = RoundedCornerShape(28.dp),
-            color = Color.White
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(WestconYellow.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Stars,
-                        contentDescription = null,
-                        tint = WestconYellow,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Text(
-                    "Rate $otherUserName's Learning Progress",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = WestconDarkBlue,
-                    fontFamily = MomotrustFontFamily,
-                    textAlign = TextAlign.Center
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    "Skill: $skillITaught",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = WestconYellow,
-                    fontFamily = MomotrustFontFamily
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                if (!otherUserMarkedDone) {
-                    Surface(
-                        color = Color.Red.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.padding(8.dp)
-                    ) {
-                        Text(
-                            "Waiting for $otherUserName to mark as done...",
-                            fontSize = 12.sp,
-                            color = Color.Red,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    repeat(5) { index ->
-                        val isSelected = index < rating.toInt()
-                        IconButton(
-                            onClick = { if (otherUserMarkedDone) rating = (index + 1).toDouble() },
-                            modifier = Modifier.size(48.dp),
-                            enabled = otherUserMarkedDone
-                        ) {
-                            Icon(
-                                imageVector = if (isSelected) Icons.Default.Star else Icons.Default.StarBorder,
-                                contentDescription = null,
-                                tint = if (isSelected) WestconYellow else Color.LightGray.copy(alpha = 0.5f),
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f).height(52.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Text("Later", color = Color.Gray, fontWeight = FontWeight.Bold)
-                    }
-                    
-                    Button(
-                        onClick = { onRate(rating, skillITaught) },
-                        enabled = otherUserMarkedDone,
-                        modifier = Modifier.weight(1.5f).height(52.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = WestconDarkBlue,
-                            disabledContainerColor = Color.LightGray.copy(alpha = 0.5f)
-                        ),
-                        shape = RoundedCornerShape(14.dp),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
-                    ) {
-                        Text("Submit Rating", fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-                }
             }
         }
     }

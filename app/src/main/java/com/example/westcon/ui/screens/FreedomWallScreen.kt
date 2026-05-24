@@ -42,7 +42,8 @@ import com.example.westcon.ui.WestconPullToRefresh
 
 @Composable
 fun FreedomWallScreen(onProfileClick: (String) -> Unit = {}) {
-    val posts by FirebaseManager.getFreedomPosts().collectAsState(initial = emptyList())
+    val postsFlow = remember { FirebaseManager.getFreedomPosts() }
+    val posts by postsFlow.collectAsState(initial = emptyList())
     var selectedFilter by remember { mutableStateOf("Recent") }
     
     val filteredPosts = remember(posts, selectedFilter) {
@@ -117,7 +118,8 @@ fun CommentDialog(postId: String, onDismiss: () -> Unit) {
     var isAnonymous by remember { mutableStateOf(true) }
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val comments by FirebaseManager.getComments(postId).collectAsState(initial = emptyList())
+    val commentsFlow = remember(postId) { FirebaseManager.getComments(postId) }
+    val comments by commentsFlow.collectAsState(initial = emptyList())
 
     AlertDialog(
         onDismissRequest = onDismiss,

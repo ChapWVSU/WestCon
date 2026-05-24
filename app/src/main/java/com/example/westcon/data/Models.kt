@@ -46,8 +46,12 @@ data class SkillExchange(
     val status: String = "ACTIVE", // "ACTIVE", "DONE"
     val requesterMarkedDone: Boolean = false,
     val responderMarkedDone: Boolean = false,
-    val requesterRating: Double = 0.0, // Rating requester gives to responder (for teaching skillWanted)
-    val responderRating: Double = 0.0, // Rating responder gives to requester (for teaching skillOffered)
+    val requesterRated: Boolean = false,
+    val responderRated: Boolean = false,
+    val requesterTeachingRating: Double = 0.0, // Rated by responder
+    val requesterLearningRating: Double = 0.0, // Rated by responder
+    val responderTeachingRating: Double = 0.0, // Rated by requester
+    val responderLearningRating: Double = 0.0, // Rated by requester
     val timestamp: Timestamp = Timestamp.now()
 )
 
@@ -62,6 +66,8 @@ data class SkillPost(
     val category: String = "",
     val title: String = "",
     val description: String = "",
+    // "SHARE" or "FIND"
+    val postType: String = "SHARE",
     // Firestore documents may use `anonymous` (no `is` prefix) or `isAnonymous`.
     var anonymous: Boolean = false,
     val timestamp: Timestamp = Timestamp.now()
