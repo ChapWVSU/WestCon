@@ -239,46 +239,12 @@ fun NotificationItem(notification: Notification) {
                     onClick = {
                         scope.launch {
                             isAccepting = true
-                            val currentUid = FirebaseManager.getCurrentUser()?.uid ?: ""
-                            val senderUid = notification.senderUid ?: ""
-                            if (currentUid.isNotEmpty() && senderUid.isNotEmpty()) {
-                                // 1. Start Chat
-                                FirebaseManager.startChat(
-                                    currentUid,
-                                    senderUid,
-                                    "I've accepted your exchange request for ${notification.skillWanted}!"
-                                )
-
-                                // 2. Update Requester's Profile (Sender) - They learn the 'skillWanted' (from responder's post)
-                                val senderProfile = FirebaseManager.getUserProfile(senderUid)
-                                if (senderProfile != null && notification.skillWanted != null) {
-                                    val isAlreadyLearning = senderProfile.skillsLearning.keys.any { it.equals(notification.skillWanted, ignoreCase = true) }
-                                    if (!isAlreadyLearning) {
-                                        val updatedLearning = senderProfile.skillsLearning.toMutableMap().apply {
-                                            put(notification.skillWanted, 0)
-                                        }
-                                        FirebaseManager.saveUserProfile(senderProfile.copy(skillsLearning = updatedLearning))
-                                    }
-                                }
-
-                                // 3. Update Responder's Profile (Current User) - They learn the 'skillOffered' (by requester)
-                                val responderProfile = FirebaseManager.getUserProfile(currentUid)
-                                if (responderProfile != null && notification.skillOffered != null) {
-                                    val isAlreadyLearning = responderProfile.skillsLearning.keys.any { it.equals(notification.skillOffered, ignoreCase = true) }
-                                    if (!isAlreadyLearning) {
-                                        val updatedLearning = responderProfile.skillsLearning.toMutableMap().apply {
-                                            put(notification.skillOffered, 0)
-                                        }
-                                        FirebaseManager.saveUserProfile(responderProfile.copy(skillsLearning = updatedLearning))
-                                    }
-                                }
-
-                                // 4. Delete Notification
-                                FirebaseManager.deleteNotification(notification.id)
-                            }
+                            val result = FirebaseManager.acceptExchangeRequest(notification)
                             isAccepting = false
-                            showAcceptConfirm = false
-                            showAcceptedDialog = true
+                            if (result.isSuccess) {
+                                showAcceptConfirm = false
+                                showAcceptedDialog = true
+                            }
                         }
                     },
                     enabled = !isAccepting,

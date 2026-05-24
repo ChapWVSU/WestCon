@@ -42,32 +42,28 @@ fun ChatDetailScreen(
     val messages by FirebaseManager.getMessages(chatId).collectAsState(initial = emptyList())
     val currentUser = FirebaseManager.getCurrentUser()
     var otherUserProfile by remember { mutableStateOf<UserProfile?>(null) }
+    var activeExchange by remember { mutableStateOf<SkillExchange?>(null) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var messageText by remember { mutableStateOf("") }
     var showRateDialog by remember { mutableStateOf(false) }
 
-    // Fetch other user's profile for the icon and mark the chat/messages as read.
+    // Fetch data and mark as read
     LaunchedEffect(otherUserUid) {
         if (otherUserUid.isNotBlank()) {
             otherUserProfile = FirebaseManager.getUserProfile(otherUserUid)
             FirebaseManager.markChatAsRead(otherUserUid)
             FirebaseManager.markChatMessagesAsRead(chatId)
+            
+            val currentUid = currentUser?.uid ?: ""
+            activeExchange = FirebaseManager.getActiveExchange(currentUid, otherUserUid)
         }
     }
 
-    // Auto-scroll to bottom when new messages arrive and mark as read
+    // Auto-scroll to bottom
     LaunchedEffect(messages) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
-            
-            // Mark as read if the last message is from the other user and is unread
-            val lastMessage = messages.last()
-            if (lastMessage.senderUid != currentUser?.uid && !lastMessage.isActuallyRead) {
-                android.util.Log.d("ChatDetailScreen", "New unread message arrived, marking as read")
-                FirebaseManager.markChatAsRead(otherUserUid)
-                FirebaseManager.markChatMessagesAsRead(chatId)
-            }
         }
     }
 
@@ -111,17 +107,57 @@ fun ChatDetailScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            otherUserName, 
-                            fontSize = 18.sp, 
-                            fontWeight = FontWeight.Bold, 
-                            color = Color.White, 
-                            fontFamily = MomotrustFontFamily
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                otherUserName, 
+                                fontSize = 18.sp, 
+                                fontWeight = FontWeight.Bold, 
+                                color = Color.White, 
+                                fontFamily = MomotrustFontFamily,
+                                maxLines = 1
+                            )
+                            if (otherUserProfile != null && otherUserProfile!!.rating > 0) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Star, 
+                                        contentDescription = null, 
+                                        tint = WestconYellow, 
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        String.format("%.1f", otherUserProfile!!.rating),
+                                        fontSize = 12.sp,
+                                        color = WestconYellow,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = MomotrustFontFamily
+                                    )
+                                }
+                            }
+                        }
+                        if (activeExchange != null) {
+                            Text(
+                                "Exchange: ${activeExchange?.skillWanted} ↔ ${activeExchange?.skillOffered}",
+                                fontSize = 10.sp,
+                                color = WestconYellow.copy(alpha = 0.9f),
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
                     }
                     
-                    IconButton(onClick = { showRateDialog = true }) {
-                        Icon(Icons.Outlined.Star, contentDescription = "Rate", tint = WestconYellow)
+                    if (activeExchange != null) {
+                        IconButton(
+                            onClick = { showRateDialog = true },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Stars, 
+                                contentDescription = "Rate Session", 
+                                tint = WestconYellow,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -133,32 +169,20 @@ fun ChatDetailScreen(
                 onSendClick = {
                     if (messageText.isNotBlank() && currentUser != null) {
                         val currentUid = currentUser.uid
-                        val otherUid = otherUserUid
-                        
-                        android.util.Log.d("ChatDetailScreen", "Sending message - currentUid: $currentUid, otherUid: $otherUid, chatId: $chatId")
-                        
-                        if (otherUid.isNotBlank()) {
-                            val newMessage = Message(
-                                senderUid = currentUid,
-                                receiverUid = otherUid,
-                                text = messageText,
-                                timestamp = Timestamp.now()
-                            )
-                            scope.launch {
-                                val result = FirebaseManager.sendMessage(newMessage, chatId)
-                                if (result.isSuccess) {
-                                    android.util.Log.d("ChatDetailScreen", "Message sent successfully")
-                                    messageText = ""
-                                } else {
-                                    android.util.Log.e("ChatDetailScreen", "Failed to send message: ${result.exceptionOrNull()?.message}")
-                                }
+                        val newMessage = Message(
+                            senderUid = currentUid,
+                            receiverUid = otherUserUid,
+                            text = messageText,
+                            timestamp = Timestamp.now()
+                        )
+                        scope.launch {
+                            val result = FirebaseManager.sendMessage(newMessage, chatId)
+                            if (result.isSuccess) {
+                                messageText = ""
                             }
-                        } else {
-                            android.util.Log.e("ChatDetailScreen", "Failed to extract otherUid from chatId: $chatId")
                         }
                     }
                 }
-
             )
         }
     ) { paddingValues ->
@@ -169,6 +193,7 @@ fun ChatDetailScreen(
             onRefresh = {
                 isRefreshing = true
                 scope.launch {
+                    activeExchange = FirebaseManager.getActiveExchange(currentUser?.uid ?: "", otherUserUid)
                     kotlinx.coroutines.delay(1000)
                     isRefreshing = false
                 }
@@ -178,7 +203,7 @@ fun ChatDetailScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFFF1F3F5)) // WhatsApp-style subtle background
+                    .background(Color(0xFFF1F3F5))
             ) {
                 LazyColumn(
                     state = listState,
@@ -194,18 +219,18 @@ fun ChatDetailScreen(
         }
     }
 
-    if (showRateDialog) {
+    if (showRateDialog && activeExchange != null) {
         RateUserDialog(
             otherUserName = otherUserName,
+            exchange = activeExchange!!,
+            currentUid = currentUser?.uid ?: "",
             onDismiss = { showRateDialog = false },
             onRate = { rating, skillName ->
                 scope.launch {
-                    val currentUid = currentUser?.uid ?: ""
-                    val otherUid = chatId.split("_").find { it != currentUid } ?: ""
-                    if (otherUid.isNotEmpty()) {
-                        FirebaseManager.rateUserSkill(otherUid, skillName, rating)
-                    }
+                    FirebaseManager.rateUserLearning(otherUserUid, skillName, rating, activeExchange!!.id)
                     showRateDialog = false
+                    // Refresh exchange info
+                    activeExchange = FirebaseManager.getActiveExchange(currentUser?.uid ?: "", otherUserUid)
                 }
             }
         )
@@ -268,8 +293,7 @@ fun ChatInputBar(
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Expressive icons for modern feel
-            IconButton(onClick = { /* Add emoji/attachment logic here if needed */ }) {
+            IconButton(onClick = { }) {
                 Icon(Icons.Default.AddCircleOutline, contentDescription = "Add", tint = Color.Gray)
             }
             
@@ -315,11 +339,18 @@ fun ChatInputBar(
 @Composable
 fun RateUserDialog(
     otherUserName: String,
+    exchange: SkillExchange,
+    currentUid: String,
     onDismiss: () -> Unit,
     onRate: (Double, String) -> Unit
 ) {
     var rating by remember { mutableDoubleStateOf(5.0) }
-    var skillName by remember { mutableStateOf("") }
+    
+    // Determine which skill I am teaching the other user
+    val skillITaught = if (exchange.requesterUid == currentUid) exchange.skillOffered else exchange.skillWanted
+    
+    // Check if other user has marked it as done
+    val otherUserMarkedDone = if (exchange.requesterUid == currentUid) exchange.responderMarkedDone else exchange.requesterMarkedDone
     
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -333,7 +364,6 @@ fun RateUserDialog(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Header with Icon
                 Box(
                     modifier = Modifier
                         .size(64.dp)
@@ -352,8 +382,8 @@ fun RateUserDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    "Rate $otherUserName's Teaching",
-                    fontSize = 20.sp,
+                    "Rate $otherUserName's Learning Progress",
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = WestconDarkBlue,
                     fontFamily = MomotrustFontFamily,
@@ -363,16 +393,33 @@ fun RateUserDialog(
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 Text(
-                    "How would you rate the quality of the teaching session?",
-                    fontSize = 14.sp,
-                    color = Color.Gray,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 20.sp
+                    "Skill: $skillITaught",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = WestconYellow,
+                    fontFamily = MomotrustFontFamily
                 )
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 
-                // Star Rating Row
+                if (!otherUserMarkedDone) {
+                    Surface(
+                        color = Color.Red.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.padding(8.dp)
+                    ) {
+                        Text(
+                            "Waiting for $otherUserName to mark as done...",
+                            fontSize = 12.sp,
+                            color = Color.Red,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
@@ -381,8 +428,9 @@ fun RateUserDialog(
                     repeat(5) { index ->
                         val isSelected = index < rating.toInt()
                         IconButton(
-                            onClick = { rating = (index + 1).toDouble() },
-                            modifier = Modifier.size(48.dp)
+                            onClick = { if (otherUserMarkedDone) rating = (index + 1).toDouble() },
+                            modifier = Modifier.size(48.dp),
+                            enabled = otherUserMarkedDone
                         ) {
                             Icon(
                                 imageVector = if (isSelected) Icons.Default.Star else Icons.Default.StarBorder,
@@ -394,53 +442,8 @@ fun RateUserDialog(
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    when(rating.toInt()) {
-                        1 -> "Poor"
-                        2 -> "Fair"
-                        3 -> "Good"
-                        4 -> "Very Good"
-                        5 -> "Excellent!"
-                        else -> "Excellent!"
-                    },
-                    fontWeight = FontWeight.ExtraBold,
-                    color = WestconDarkBlue,
-                    fontSize = 16.sp,
-                    fontFamily = MomotrustFontFamily
-                )
-                
-                Spacer(modifier = Modifier.height(28.dp))
-                
-                // Skill Input
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        "What skill did you learn?",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = WestconDarkBlue,
-                        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-                    )
-                    OutlinedTextField(
-                        value = skillName,
-                        onValueChange = { skillName = it },
-                        placeholder = { Text("e.g. Kotlin, UI/UX, Guitar", color = Color.Gray.copy(alpha = 0.5f)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.Black,
-                            unfocusedTextColor = Color.Black,
-                            focusedBorderColor = WestconDarkBlue,
-                            unfocusedBorderColor = Color.LightGray.copy(alpha = 0.5f)
-                        )
-                    )
-                }
-                
                 Spacer(modifier = Modifier.height(32.dp))
                 
-                // Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -454,8 +457,8 @@ fun RateUserDialog(
                     }
                     
                     Button(
-                        onClick = { if (skillName.isNotBlank()) onRate(rating, skillName) },
-                        enabled = skillName.isNotBlank(),
+                        onClick = { onRate(rating, skillITaught) },
+                        enabled = otherUserMarkedDone,
                         modifier = Modifier.weight(1.5f).height(52.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = WestconDarkBlue,

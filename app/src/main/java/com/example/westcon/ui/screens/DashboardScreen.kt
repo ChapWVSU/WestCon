@@ -116,10 +116,36 @@ fun DashboardScreen(
     }
 
     if (skillToExchange != null) {
-        ExchangeDialog(
-            targetPost = skillToExchange!!,
-            onDismiss = { skillToExchange = null }
-        )
+        var existingExchange by remember { mutableStateOf<SkillExchange?>(null) }
+        var checkingExchange by remember { mutableStateOf(true) }
+        val currentUid = FirebaseManager.getCurrentUser()?.uid ?: ""
+
+        LaunchedEffect(skillToExchange) {
+            checkingExchange = true
+            existingExchange = FirebaseManager.getActiveExchange(currentUid, skillToExchange!!.authorUid)
+            checkingExchange = false
+        }
+
+        if (!checkingExchange) {
+            if (existingExchange != null) {
+                AlertDialog(
+                    onDismissRequest = { skillToExchange = null },
+                    containerColor = White,
+                    title = { Text("Active Exchange Found", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
+                    text = { Text("You already have an active exchange with ${skillToExchange!!.authorName}. Please mark it as done before starting a new one.") },
+                    confirmButton = {
+                        Button(onClick = { skillToExchange = null }, colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)) {
+                            Text("Got it")
+                        }
+                    }
+                )
+            } else {
+                ExchangeDialog(
+                    targetPost = skillToExchange!!,
+                    onDismiss = { skillToExchange = null }
+                )
+            }
+        }
     }
 }
 

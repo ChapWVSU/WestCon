@@ -27,9 +27,17 @@ import androidx.compose.ui.unit.sp
 import com.example.westcon.ui.theme.*
 import com.example.westcon.data.FirebaseManager
 import com.example.westcon.data.SkillPost
+import com.example.westcon.data.UserProfile
 import com.example.westcon.ui.UIUtils
 import com.example.westcon.ui.WestconPullToRefresh
 import kotlinx.coroutines.launch
+
+enum class SearchFilter(val label: String) {
+    ALL("All"),
+    SKILLS("Skills"),
+    USERS("Users"),
+    CATEGORIES("Categories")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,14 +46,43 @@ fun SearchScreen(
     onProfileClick: (String) -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    val posts by FirebaseManager.getSkillPosts().collectAsState(initial = emptyList())
+    var selectedFilter by remember { mutableStateOf(SearchFilter.ALL) }
     
-    val filteredPosts = remember(searchQuery, posts) {
-        if (searchQuery.isBlank()) emptyList()
-        else posts.filter { 
-            it.title.contains(searchQuery, ignoreCase = true) || 
-            it.description.contains(searchQuery, ignoreCase = true) ||
-            it.category.contains(searchQuery, ignoreCase = true)
+    val posts by FirebaseManager.getSkillPosts().collectAsState(initial = emptyList())
+    val users by FirebaseManager.getAllUserProfiles().collectAsState(initial = emptyList())
+    
+    val filteredResults = remember(searchQuery, posts, users, selectedFilter) {
+        if (searchQuery.isBlank()) {
+            Triple(emptyList<SkillPost>(), emptyList<UserProfile>(), emptyList<String>())
+        } else {
+            // 1. Identify matched users (by name, dept, course)
+            val matchedUsers = users.filter { 
+                it.name.contains(searchQuery, ignoreCase = true) || 
+                it.department.contains(searchQuery, ignoreCase = true) ||
+                it.course.contains(searchQuery, ignoreCase = true)
+            }
+            
+            // 2. Identify matched categories
+            val matchedCategories = posts.map { it.category }
+                .distinct()
+                .filter { it.contains(searchQuery, ignoreCase = true) }
+            
+            // 3. Associative Skill Search:
+            // Match posts where: 
+            // - The title/desc matches the query OR 
+            // - The author matches the query OR
+            // - The category matches the query
+            val matchedUserUids = matchedUsers.map { it.uid }.toSet()
+            
+            val matchedPosts = posts.filter { 
+                it.title.contains(searchQuery, ignoreCase = true) || 
+                it.description.contains(searchQuery, ignoreCase = true) ||
+                it.authorName.contains(searchQuery, ignoreCase = true) ||
+                matchedUserUids.contains(it.authorUid) ||
+                it.category.contains(searchQuery, ignoreCase = true)
+            }
+            
+            Triple(matchedPosts, matchedUsers, matchedCategories)
         }
     }
 
@@ -58,7 +95,6 @@ fun SearchScreen(
                 Column(
                     modifier = Modifier
                         .statusBarsPadding()
-                        .padding(bottom = 8.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -73,7 +109,7 @@ fun SearchScreen(
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Find skills, departments...", color = Color.Gray, fontSize = 15.sp) },
+                            placeholder = { Text("Find users, skills, categories...", color = Color.Gray, fontSize = 15.sp) },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(52.dp)
@@ -102,6 +138,10 @@ fun SearchScreen(
                             }
                         )
                     }
+                    
+                    if (searchQuery.isNotEmpty()) {
+                        SearchFilterRow(selectedFilter) { selectedFilter = it }
+                    }
                 }
             }
         }
@@ -126,11 +166,51 @@ fun SearchScreen(
                     .background(Color(0xFFF8FAFC))
             ) {
                 if (searchQuery.isEmpty()) {
-                    InitialSearchState(onCategoryClick = { searchQuery = it })
+                    InitialSearchState(onCategoryClick = { 
+                        searchQuery = it 
+                        selectedFilter = SearchFilter.CATEGORIES
+                    })
                 } else {
-                    SearchResultsContent(searchQuery, filteredPosts, onProfileClick = onProfileClick)
+                    SearchResultsContent(
+                        query = searchQuery,
+                        filter = selectedFilter,
+                        posts = filteredResults.first,
+                        users = filteredResults.second,
+                        categories = filteredResults.third,
+                        onProfileClick = onProfileClick,
+                        onCategorySelect = { 
+                            searchQuery = it
+                            selectedFilter = SearchFilter.SKILLS // Show skills for this category
+                        }
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SearchFilterRow(selected: SearchFilter, onFilterSelect: (SearchFilter) -> Unit) {
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(SearchFilter.values()) { filter ->
+            FilterChip(
+                selected = selected == filter,
+                onClick = { onFilterSelect(filter) },
+                label = { Text(filter.label, fontSize = 12.sp) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = WestconDarkBlue,
+                    selectedLabelColor = White,
+                    containerColor = Color(0xFFF1F5F9),
+                    labelColor = Color.Gray
+                ),
+                border = null,
+                shape = RoundedCornerShape(10.dp)
+            )
         }
     }
 }
@@ -272,89 +352,156 @@ fun RecentSearchItem(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun SearchResultsContent(query: String, results: List<SkillPost>, onProfileClick: (String) -> Unit = {}) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+fun SearchResultsContent(
+    query: String,
+    filter: SearchFilter,
+    posts: List<SkillPost>,
+    users: List<UserProfile>,
+    categories: List<String>,
+    onProfileClick: (String) -> Unit,
+    onCategorySelect: (String) -> Unit
+) {
+    val showSkills = filter == SearchFilter.ALL || filter == SearchFilter.SKILLS
+    val showUsers = filter == SearchFilter.ALL || filter == SearchFilter.USERS
+    val showCategories = filter == SearchFilter.ALL || filter == SearchFilter.CATEGORIES
+
+    val noResults = (showSkills && posts.isEmpty()) && 
+                  (showUsers && users.isEmpty()) && 
+                  (showCategories && categories.isEmpty())
+
+    if (noResults) {
+        EmptySearchState(query)
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 24.dp)
         ) {
-            Text(
-                "Results for \"$query\"",
-                color = Color.Gray,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Surface(
-                color = WestconDarkBlue.copy(alpha = 0.1f),
-                shape = CircleShape
-            ) {
-                Text(
-                    "${results.size} found",
-                    color = WestconDarkBlue,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                )
-            }
-        }
-        
-        if (results.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 40.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFF1F5F9)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.SearchOff, 
-                            contentDescription = null, 
-                            modifier = Modifier.size(60.dp), 
-                            tint = Color.LightGray
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        "No results found",
-                        color = WestconDarkBlue,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = MomotrustFontFamily
+            // Categories Section
+            if (showCategories && categories.isNotEmpty()) {
+                item { SectionHeader("Matched Categories") }
+                items(categories) { category ->
+                    ListItem(
+                        headlineContent = { Text(category, fontWeight = FontWeight.Bold) },
+                        leadingContent = { Icon(Icons.Default.Category, contentDescription = null, tint = WestconDarkBlue) },
+                        modifier = Modifier.clickable { onCategorySelect(category) }
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "We couldn't find any skills matching \"$query\". Try checking your spelling or use different keywords.",
-                        color = Color.Gray,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 20.sp
-                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(results, key = { it.id }) { post ->
+
+            // Users Section
+            if (showUsers && users.isNotEmpty()) {
+                item { SectionHeader("Taga-West Users") }
+                items(users) { user ->
+                    UserSearchItem(user, onProfileClick)
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color(0xFFF1F5F9))
+                }
+            }
+
+            // Skills Section
+            if (showSkills && posts.isNotEmpty()) {
+                item { SectionHeader("Skill Swaps") }
+                items(posts, key = { it.id }) { post ->
                     SkillPostCard(
                         post = post,
                         isOwnPost = post.authorUid == FirebaseManager.getCurrentUser()?.uid,
-                        onExchangeClick = { /* Handle in Dashboard or separate state */ },
-                        onMessageClick = { /* Handle message */ },
+                        onExchangeClick = { /* Handled elsewhere */ },
+                        onMessageClick = { /* Handled elsewhere */ },
                         onProfileClick = { onProfileClick(post.authorUid) }
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SectionHeader(title: String) {
+    Text(
+        title,
+        modifier = Modifier.padding(16.dp),
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Black,
+        color = Color.Gray.copy(alpha = 0.8f),
+        fontFamily = MomotrustFontFamily
+    )
+}
+
+@Composable
+fun UserSearchItem(user: UserProfile, onClick: (String) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick(user.uid) }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFF1F5F9)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                UIUtils.getProfileIcon(user.profileIconName),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+                tint = WestconDarkBlue
+            )
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(user.name, fontWeight = FontWeight.Bold, color = WestconDarkBlue, fontSize = 15.sp)
+            Text("${user.department} • ${user.course}", color = Color.Gray, fontSize = 12.sp)
+        }
+        if (user.rating > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Star, contentDescription = null, tint = WestconYellow, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(String.format("%.1f", user.rating), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptySearchState(query: String) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 40.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFF1F5F9)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.SearchOff, 
+                    contentDescription = null, 
+                    modifier = Modifier.size(60.dp), 
+                    tint = Color.LightGray
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                "No results found",
+                color = WestconDarkBlue,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = MomotrustFontFamily
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "We couldn't find anything matching \"$query\". Try different filters or keywords.",
+                color = Color.Gray,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp
+            )
         }
     }
 }

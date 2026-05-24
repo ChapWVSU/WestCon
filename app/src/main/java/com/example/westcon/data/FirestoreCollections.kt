@@ -7,4 +7,5 @@ object FirestoreCollections {
     const val MESSAGES = "messages"
     const val CHAT_SUMMARIES = "chat_summaries"
     const val NOTIFICATIONS = "notifications"
+    const val EXCHANGES = "exchanges"
 }

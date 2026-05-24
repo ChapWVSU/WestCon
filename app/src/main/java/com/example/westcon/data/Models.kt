@@ -2,6 +2,7 @@ package com.example.westcon.data
 
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.PropertyName
+import com.google.firebase.firestore.DocumentId
 
 data class SkillMastery(
     val skillName: String = "",
@@ -10,10 +11,17 @@ data class SkillMastery(
     val level: Int = 1 // 1: Novice, 2: Intermediate, 3: Advanced, 4: Expert, 5: Guru
 )
 
+data class LearningSkill(
+    val skillName: String = "",
+    val rating: Double = 0.0, // 0.0 means not yet rated (N/A)
+    val isDone: Boolean = false,
+    val exchangeId: String? = null
+)
+
 // Firestore collection: users
 // Document ID: user's uid
-// This stores the authenticated user's profile and preferences.
 data class UserProfile(
+    // REMOVED @DocumentId to avoid crash if 'uid' field exists in the document
     val uid: String = "",
     val name: String = "",
     val email: String = "",
@@ -25,10 +33,26 @@ data class UserProfile(
     val swaps: Int = 0,
     val about: String = "",
     val skillsToTeach: List<SkillMastery> = emptyList(),
-    val skillsLearning: Map<String, Int> = emptyMap() // Skill Name to Progress Percentage
+    val skillsLearning: List<LearningSkill> = emptyList()
+)
+
+data class SkillExchange(
+    // REMOVED @DocumentId to avoid crash if 'id' field exists in the document
+    val id: String = "",
+    val requesterUid: String = "",
+    val responderUid: String = "",
+    val skillOffered: String = "", // Skill requester is teaching
+    val skillWanted: String = "", // Skill responder is teaching
+    val status: String = "ACTIVE", // "ACTIVE", "DONE"
+    val requesterMarkedDone: Boolean = false,
+    val responderMarkedDone: Boolean = false,
+    val requesterRating: Double = 0.0, // Rating requester gives to responder (for teaching skillWanted)
+    val responderRating: Double = 0.0, // Rating responder gives to requester (for teaching skillOffered)
+    val timestamp: Timestamp = Timestamp.now()
 )
 
 data class SkillPost(
+    // REMOVED @DocumentId to avoid crash if 'id' field exists in the document
     val id: String = "",
     val authorUid: String = "",
     val authorName: String = "",
@@ -44,6 +68,7 @@ data class SkillPost(
 )
 
 data class FreedomPost(
+    // REMOVED @DocumentId to avoid crash if 'id' field exists in the document
     val id: String = "",
     val authorUid: String = "",
     val authorName: String = "User",
@@ -60,6 +85,7 @@ data class FreedomPost(
 )
 
 data class FreedomComment(
+    // REMOVED @DocumentId to avoid crash if 'id' field exists in the document
     val id: String = "",
     val postId: String = "",
     val authorUid: String = "",
@@ -71,6 +97,7 @@ data class FreedomComment(
 )
 
 data class Message(
+    // REMOVED @DocumentId to avoid crash if 'id' field exists in the document
     val id: String = "",
     val senderUid: String = "",
     val receiverUid: String = "",
@@ -86,6 +113,7 @@ data class Message(
 )
 
 data class ChatSummary(
+    // Document ID is otherUserUid, but it's often stored in the document too.
     val otherUserUid: String = "",
     val otherUserName: String = "",
     val otherUserIconName: String = "Person",
@@ -106,6 +134,7 @@ data class ChatSummary(
 )
 
 data class Notification(
+    // REMOVED @DocumentId to avoid crash if 'id' field exists in the document
     val id: String = "",
     val receiverUid: String = "",
     val type: String = "SKILL_EXCHANGE", // SKILL_EXCHANGE, ACHIEVEMENT, MESSAGE, DIGEST

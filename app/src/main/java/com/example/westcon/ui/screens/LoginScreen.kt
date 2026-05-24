@@ -87,9 +87,69 @@ fun LoginScreen(onBackClick: () -> Unit, onLoginSuccess: () -> Unit) {
                 showEyeIcon = true // Adds the eye icon from your secret.xml
             )
 
+            var showForgotDialog by remember { mutableStateOf(false) }
+            var resetEmail by remember { mutableStateOf("") }
+            var isResetting by remember { mutableStateOf(false) }
+            var resetMessage by remember { mutableStateOf<String?>(null) }
+
+            if (showForgotDialog) {
+                AlertDialog(
+                    onDismissRequest = { showForgotDialog = false },
+                    containerColor = Color.White,
+                    title = { Text("Reset Password", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
+                    text = {
+                        Column {
+                            Text("Enter your WVSU email to receive a password reset link.", fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            OutlinedTextField(
+                                value = resetEmail,
+                                onValueChange = { resetEmail = it },
+                                placeholder = { Text("email@wvsu.edu.ph") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            if (resetMessage != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(resetMessage!!, color = if (resetMessage!!.contains("sent")) Color(0xFF4CAF50) else Color.Red, fontSize = 12.sp)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (resetEmail.isBlank() || !resetEmail.endsWith("@wvsu.edu.ph")) {
+                                    resetMessage = "Please enter a valid WVSU email"
+                                    return@Button
+                                }
+                                isResetting = true
+                                scope.launch {
+                                    val result = FirebaseManager.sendPasswordResetEmail(resetEmail)
+                                    isResetting = false
+                                    if (result.isSuccess) {
+                                        resetMessage = "Reset password email sent via Firebase Authentication."
+                                    } else {
+                                        resetMessage = result.exceptionOrNull()?.message ?: "Failed to send reset email"
+                                    }
+                                }
+                            },
+                            enabled = !isResetting,
+                            colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)
+                        ) {
+                            if (isResetting) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = WestconYellow)
+                            else Text("Send Reset Link", color = WestconYellow)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showForgotDialog = false; resetMessage = null }) {
+                            Text("Cancel", color = Color.Gray)
+                        }
+                    }
+                )
+            }
+
             // Forgot Password Link
             TextButton(
-                onClick = { /* Handle Forgot Password */ },
+                onClick = { showForgotDialog = true },
                 contentPadding = PaddingValues(0.dp)
             ) {
                 Text(

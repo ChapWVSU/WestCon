@@ -4,6 +4,7 @@ import com.example.westcon.data.FirestoreCollections
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -44,6 +45,15 @@ object FirebaseManager {
 
     fun logout() = auth.signOut()
 
+    suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
+        return try {
+            auth.sendPasswordResetEmail(email).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // --- User Profile ---
     suspend fun checkUsernameExists(username: String): Boolean {
         return try {
@@ -56,9 +66,11 @@ object FirebaseManager {
 
     suspend fun saveUserProfile(profile: UserProfile): Result<Unit> {
         return try {
+            android.util.Log.d("FirebaseManager", "Saving profile for ${profile.uid}, skillsLearning size: ${profile.skillsLearning.size}")
             usersCollection.document(profile.uid).set(profile).await()
             Result.success(Unit)
         } catch (e: Exception) {
+            android.util.Log.e("FirebaseManager", "Error saving profile for ${profile.uid}: ${e.message}")
             Result.failure(e)
         }
     }
@@ -67,16 +79,326 @@ object FirebaseManager {
         return try {
             android.util.Log.d("FirebaseManager", "Fetching profile for uid: $uid")
             val snapshot = usersCollection.document(uid).get().await()
-            val profile = snapshot.toObject(UserProfile::class.java)
-            if (profile != null) {
-                android.util.Log.d("FirebaseManager", "Profile fetched successfully for $uid: name=${profile.name}")
-            } else {
-                android.util.Log.w("FirebaseManager", "Profile is null for uid: $uid, snapshot exists: ${snapshot.exists()}")
+            if (!snapshot.exists()) {
+                android.util.Log.w("FirebaseManager", "Snapshot does not exist for uid: $uid")
+                return null
             }
+
+            val data = snapshot.data ?: return null
+            android.util.Log.d("FirebaseManager", "Raw profile data keys: ${data.keys}")
+            
+            // Manual deserialization to handle schema migration
+            val skillsLearningData = data["skillsLearning"]
+            val migratedSkillsLearning = mutableListOf<LearningSkill>()
+            
+            if (skillsLearningData is Map<*, *>) {
+                android.util.Log.d("FirebaseManager", "Found old Map format for skillsLearning: $skillsLearningData")
+                // Migrate from old Map<String, Int> format
+                skillsLearningData.forEach { (key, value) ->
+                    if (key is String) {
+                        migratedSkillsLearning.add(LearningSkill(skillName = key))
+                    }
+                }
+            } else if (skillsLearningData is List<*>) {
+                android.util.Log.d("FirebaseManager", "Found new List format for skillsLearning with ${skillsLearningData.size} items")
+                // Handle new List<LearningSkill> format
+                skillsLearningData.forEach { item ->
+                    if (item is Map<*, *>) {
+                        migratedSkillsLearning.add(LearningSkill(
+                            skillName = item["skillName"] as? String ?: "",
+                            rating = (item["rating"] as? Number)?.toDouble() ?: 0.0,
+                            isDone = item["isDone"] as? Boolean ?: false,
+                            exchangeId = item["exchangeId"] as? String
+                        ))
+                    }
+                }
+            }
+
+            val profile = UserProfile(
+                uid = data["uid"] as? String ?: uid,
+                name = data["name"] as? String ?: "",
+                email = data["email"] as? String ?: "",
+                profileIconName = data["profileIconName"] as? String ?: "Person",
+                department = data["department"] as? String ?: "",
+                course = data["course"] as? String ?: "",
+                year = data["year"] as? String ?: "",
+                rating = (data["rating"] as? Number)?.toDouble() ?: 0.0,
+                swaps = (data["swaps"] as? Number)?.toInt() ?: 0,
+                about = data["about"] as? String ?: "",
+                skillsToTeach = (data["skillsToTeach"] as? List<*>)?.mapNotNull { item ->
+                    if (item is Map<*, *>) {
+                        SkillMastery(
+                            skillName = item["skillName"] as? String ?: "",
+                            averageRating = (item["averageRating"] as? Number)?.toDouble() ?: 0.0,
+                            totalRatings = (item["totalRatings"] as? Number)?.toInt() ?: 0,
+                            level = (item["level"] as? Number)?.toInt() ?: 1
+                        )
+                    } else null
+                } ?: emptyList(),
+                skillsLearning = migratedSkillsLearning
+            )
+
+            android.util.Log.d("FirebaseManager", "Profile successfully parsed for ${profile.name} (${profile.uid}). learningCount=${profile.skillsLearning.size}")
             profile
         } catch (e: Exception) {
-            android.util.Log.e("FirebaseManager", "Error fetching profile for uid $uid: ${e.message}", e)
+            android.util.Log.e("FirebaseManager", "Error fetching/parsing profile for uid $uid: ${e.message}", e)
             null
+        }
+    }
+
+    fun getAllUserProfiles(): Flow<List<UserProfile>> = callbackFlow {
+        val subscription = usersCollection
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                if (snapshot != null) {
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        // Reuse the parsing logic from getUserProfile for consistency
+                        try {
+                            val data = doc.data ?: return@mapNotNull null
+                            val skillsLearningData = data["skillsLearning"]
+                            val migratedSkillsLearning = mutableListOf<LearningSkill>()
+                            
+                            if (skillsLearningData is Map<*, *>) {
+                                skillsLearningData.forEach { (key, _) ->
+                                    if (key is String) migratedSkillsLearning.add(LearningSkill(skillName = key))
+                                }
+                            } else if (skillsLearningData is List<*>) {
+                                skillsLearningData.forEach { item ->
+                                    if (item is Map<*, *>) {
+                                        migratedSkillsLearning.add(LearningSkill(
+                                            skillName = item["skillName"] as? String ?: "",
+                                            rating = (item["rating"] as? Number)?.toDouble() ?: 0.0,
+                                            isDone = item["isDone"] as? Boolean ?: false,
+                                            exchangeId = item["exchangeId"] as? String
+                                        ))
+                                    }
+                                }
+                            }
+
+                            UserProfile(
+                                uid = doc.id,
+                                name = data["name"] as? String ?: "",
+                                email = data["email"] as? String ?: "",
+                                profileIconName = data["profileIconName"] as? String ?: "Person",
+                                department = data["department"] as? String ?: "",
+                                course = data["course"] as? String ?: "",
+                                year = data["year"] as? String ?: "",
+                                rating = (data["rating"] as? Number)?.toDouble() ?: 0.0,
+                                swaps = (data["swaps"] as? Number)?.toInt() ?: 0,
+                                about = data["about"] as? String ?: "",
+                                skillsToTeach = (data["skillsToTeach"] as? List<*>)?.mapNotNull { item ->
+                                    if (item is Map<*, *>) {
+                                        SkillMastery(
+                                            skillName = item["skillName"] as? String ?: "",
+                                            averageRating = (item["averageRating"] as? Number)?.toDouble() ?: 0.0,
+                                            totalRatings = (item["totalRatings"] as? Number)?.toInt() ?: 0,
+                                            level = (item["level"] as? Number)?.toInt() ?: 1
+                                        )
+                                    } else null
+                                } ?: emptyList(),
+                                skillsLearning = migratedSkillsLearning
+                            )
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    trySend(list)
+                }
+            }
+        awaitClose { subscription.remove() }
+    }
+
+    // --- Skill Exchanges ---
+    private val exchangesCollection by lazy { db.collection(FirestoreCollections.EXCHANGES) }
+
+    suspend fun createExchange(exchange: SkillExchange): Result<Unit> {
+        return try {
+            val ref = exchangesCollection.document()
+            exchangesCollection.document(ref.id).set(exchange.copy(id = ref.id)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getActiveExchange(uid1: String, uid2: String): SkillExchange? {
+        return try {
+            val query1 = exchangesCollection
+                .whereEqualTo("requesterUid", uid1)
+                .whereEqualTo("responderUid", uid2)
+                .whereEqualTo("status", "ACTIVE")
+                .get().await()
+            
+            if (!query1.isEmpty) return query1.documents[0].toObject(SkillExchange::class.java)
+
+            val query2 = exchangesCollection
+                .whereEqualTo("requesterUid", uid2)
+                .whereEqualTo("responderUid", uid1)
+                .whereEqualTo("status", "ACTIVE")
+                .get().await()
+            
+            if (!query2.isEmpty) return query2.documents[0].toObject(SkillExchange::class.java)
+
+            null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun markExchangeDone(exchangeId: String, uid: String): Result<Unit> {
+        return try {
+            val docRef = exchangesCollection.document(exchangeId)
+            val snapshot = docRef.get().await()
+            val exchange = snapshot.toObject(SkillExchange::class.java) ?: return Result.failure(Exception("Exchange not found"))
+            
+            val isRequester = exchange.requesterUid == uid
+            val updateField = if (isRequester) "requesterMarkedDone" else "responderMarkedDone"
+            
+            docRef.update(updateField, true).await()
+            
+            // Check if both are done
+            val updatedSnapshot = docRef.get().await()
+            val updatedExchange = updatedSnapshot.toObject(SkillExchange::class.java)!!
+            if (updatedExchange.requesterMarkedDone && updatedExchange.responderMarkedDone) {
+                docRef.update("status", "DONE").await()
+            }
+            
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun getChatId(uid1: String, uid2: String): String {
+        return if (uid1 < uid2) "${uid1}_${uid2}" else "${uid2}_$uid1"
+    }
+
+    suspend fun acceptExchangeRequest(notification: Notification): Result<Unit> {
+        android.util.Log.d("FirebaseManager", "acceptExchangeRequest START for notification ${notification.id}")
+        return try {
+            val currentUid = auth.currentUser?.uid ?: return Result.failure(Exception("Not logged in"))
+            val senderUid = notification.senderUid ?: return Result.failure(Exception("Sender UID missing"))
+            val skillOffered = notification.skillOffered ?: ""
+            val skillWanted = notification.skillWanted ?: ""
+
+            android.util.Log.d("FirebaseManager", "Exchange details: currentUid=$currentUid, senderUid=$senderUid, skillOffered=$skillOffered, skillWanted=$skillWanted")
+
+            // 1. Create SkillExchange record FIRST
+            val exchangeRef = exchangesCollection.document()
+            val exchange = SkillExchange(
+                id = exchangeRef.id,
+                requesterUid = senderUid,
+                responderUid = currentUid,
+                skillOffered = skillOffered,
+                skillWanted = skillWanted,
+                status = "ACTIVE"
+            )
+            android.util.Log.d("FirebaseManager", "Creating SkillExchange document: ${exchangeRef.id}")
+            exchangeRef.set(exchange).await()
+
+            // 2. Update Profiles (Critical path)
+            val senderProfile = getUserProfile(senderUid)
+            val responderProfile = getUserProfile(currentUid)
+
+            if (senderProfile != null) {
+                val updatedLearning = senderProfile.skillsLearning.toMutableList()
+                if (skillWanted.isNotBlank() && updatedLearning.none { it.skillName.equals(skillWanted, ignoreCase = true) }) {
+                    updatedLearning.add(LearningSkill(skillName = skillWanted, exchangeId = exchange.id))
+                }
+                val result = saveUserProfile(senderProfile.copy(
+                    skillsLearning = updatedLearning,
+                    swaps = senderProfile.swaps + 1
+                ))
+                if (result.isFailure) throw result.exceptionOrNull() ?: Exception("Failed to update requester profile")
+            } else {
+                throw Exception("Requester profile not found")
+            }
+
+            if (responderProfile != null) {
+                val updatedLearning = responderProfile.skillsLearning.toMutableList()
+                if (skillOffered.isNotBlank() && updatedLearning.none { it.skillName.equals(skillOffered, ignoreCase = true) }) {
+                    updatedLearning.add(LearningSkill(skillName = skillOffered, exchangeId = exchange.id))
+                }
+                val result = saveUserProfile(responderProfile.copy(
+                    skillsLearning = updatedLearning,
+                    swaps = responderProfile.swaps + 1
+                ))
+                if (result.isFailure) throw result.exceptionOrNull() ?: Exception("Failed to update responder profile")
+            } else {
+                throw Exception("Responder profile not found")
+            }
+
+            // 3. Send automated acceptance message (Non-critical, but should work)
+            val chatId = getChatId(currentUid, senderUid)
+            val acceptanceMsg = "I've accepted your exchange request! I'll teach you $skillWanted and you'll teach me $skillOffered."
+            sendMessage(
+                Message(
+                    senderUid = currentUid,
+                    receiverUid = senderUid,
+                    text = acceptanceMsg,
+                    timestamp = Timestamp.now()
+                ),
+                chatId
+            )
+
+            // 4. Delete Notification
+            deleteNotification(notification.id)
+            
+            android.util.Log.d("FirebaseManager", "acceptExchangeRequest SUCCESS")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            android.util.Log.e("FirebaseManager", "Error in acceptExchangeRequest: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun rateUserLearning(targetUid: String, skillName: String, rating: Double, exchangeId: String): Result<Unit> {
+        return try {
+            val profile = getUserProfile(targetUid) ?: return Result.failure(Exception("User not found"))
+            val currentUid = auth.currentUser?.uid ?: ""
+            
+            // Update the skill in skillsLearning
+            val learningSkills = profile.skillsLearning.toMutableList()
+            val skillIndex = learningSkills.indexOfFirst { it.skillName.equals(skillName, ignoreCase = true) }
+            
+            if (skillIndex != -1) {
+                learningSkills[skillIndex] = learningSkills[skillIndex].copy(rating = rating, isDone = true)
+            } else {
+                learningSkills.add(LearningSkill(skillName = skillName, rating = rating, isDone = true))
+            }
+
+            // Update exchange record
+            val docRef = exchangesCollection.document(exchangeId)
+            val exchangeSnapshot = docRef.get().await()
+            val exchange = exchangeSnapshot.toObject(SkillExchange::class.java)
+            if (exchange != null) {
+                if (exchange.requesterUid == currentUid) {
+                    docRef.update("requesterRating", rating).await()
+                } else {
+                    docRef.update("responderRating", rating).await()
+                }
+            }
+
+            // Recalculate Trust Score (True Mean of all ratings)
+            val ratedLearning = learningSkills.filter { it.rating > 0 }
+            val sumLearning = ratedLearning.sumOf { it.rating }
+            val countLearning = ratedLearning.size
+            
+            val ratedTeaching = profile.skillsToTeach.filter { it.totalRatings > 0 }
+            val sumTeaching = ratedTeaching.sumOf { it.averageRating * it.totalRatings }
+            val countTeaching = ratedTeaching.sumOf { it.totalRatings }
+            
+            val totalCount = countLearning + countTeaching
+            val finalRating = if (totalCount > 0) {
+                (sumLearning + sumTeaching) / totalCount
+            } else {
+                0.0
+            }
+            
+            saveUserProfile(profile.copy(skillsLearning = learningSkills, rating = finalRating))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -106,7 +428,7 @@ object FirebaseManager {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) return@addSnapshotListener
                 if (snapshot != null) {
-                    trySend(snapshot.toObjects(SkillPost::class.java))
+                    trySend(snapshot.documents.mapNotNull { it.toObject(SkillPost::class.java)?.copy(id = it.id) })
                 }
             }
         awaitClose { subscription.remove() }
@@ -146,7 +468,7 @@ object FirebaseManager {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) return@addSnapshotListener
                 if (snapshot != null) {
-                    trySend(snapshot.toObjects(FreedomPost::class.java))
+                    trySend(snapshot.documents.mapNotNull { it.toObject(FreedomPost::class.java)?.copy(id = it.id) })
                 }
             }
         awaitClose { subscription.remove() }
@@ -157,7 +479,7 @@ object FirebaseManager {
             val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Not logged in"))
             val docRef = freedomWallCollection.document(postId)
             val snapshot = docRef.get().await()
-            val post = snapshot.toObject(FreedomPost::class.java) ?: return Result.failure(Exception("Post not found"))
+            val post = snapshot.toObject(FreedomPost::class.java)?.copy(id = snapshot.id) ?: return Result.failure(Exception("Post not found"))
             
             val likedBy = post.likedBy.toMutableList()
             var likes = post.likes
@@ -215,7 +537,7 @@ object FirebaseManager {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) return@addSnapshotListener
                 if (snapshot != null) {
-                    trySend(snapshot.toObjects(FreedomComment::class.java))
+                    trySend(snapshot.documents.mapNotNull { it.toObject(FreedomComment::class.java)?.copy(id = it.id) })
                 }
             }
         awaitClose { subscription.remove() }
@@ -336,7 +658,7 @@ object FirebaseManager {
             val docRef = chatSummariesCollection.document(uid).collection("chats").document(otherUid)
             val unreadCount = if (isRecipient) {
                 val existingSnapshot = docRef.get().await()
-                val existingSummary = existingSnapshot.toObject(ChatSummary::class.java)
+                val existingSummary = existingSnapshot.toObject(ChatSummary::class.java)?.copy(otherUserUid = existingSnapshot.id)
                 (existingSummary?.unreadCount ?: 0) + 1
             } else {
                 0
@@ -457,9 +779,24 @@ object FirebaseManager {
                     level = newLevel
                 )
                 
-                // Update overall user rating as well
-                val overallAvg = skills.map { it.averageRating }.average()
-                saveUserProfile(profile.copy(skillsToTeach = skills, rating = overallAvg))
+                // Recalculate Trust Score (True Mean of all ratings)
+                val learningSkills = profile.skillsLearning
+                val ratedLearning = learningSkills.filter { it.rating > 0 }
+                val sumLearning = ratedLearning.sumOf { it.rating }
+                val countLearning = ratedLearning.size
+                
+                val ratedTeaching = skills.filter { it.totalRatings > 0 }
+                val sumTeaching = ratedTeaching.sumOf { it.averageRating * it.totalRatings }
+                val countTeaching = ratedTeaching.sumOf { it.totalRatings }
+                
+                val totalCount = countLearning + countTeaching
+                val finalRating = if (totalCount > 0) {
+                    (sumLearning + sumTeaching) / totalCount
+                } else {
+                    0.0
+                }
+
+                saveUserProfile(profile.copy(skillsToTeach = skills, rating = finalRating))
             }
             Result.success(Unit)
         } catch (e: Exception) {
@@ -480,7 +817,7 @@ object FirebaseManager {
                 }
                 if (snapshot != null) {
                     val list = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(Message::class.java)?.apply {
+                        doc.toObject(Message::class.java)?.copy(id = doc.id)?.apply {
                             val data = doc.data
                             // Handle both possible field names for robustness
                             isRead = when {
@@ -521,7 +858,7 @@ object FirebaseManager {
                 }
                 if (snapshot != null) {
                     val list = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(ChatSummary::class.java)?.apply {
+                        doc.toObject(ChatSummary::class.java)?.copy(otherUserUid = doc.id)?.apply {
                             val data = doc.data
                             // Robust unread detection
                             isRead = when {
@@ -581,7 +918,7 @@ object FirebaseManager {
                                 }
                                 if (snap2 != null) {
                                     val list = snap2.documents.mapNotNull { doc ->
-                                        doc.toObject(Notification::class.java)?.apply {
+                                        doc.toObject(Notification::class.java)?.copy(id = doc.id)?.apply {
                                             val docMap = doc.data
                                             readCompat = when {
                                                 docMap?.get("read") is Boolean -> docMap["read"] as Boolean
@@ -599,7 +936,7 @@ object FirebaseManager {
 
                 if (snapshot != null) {
                     val list = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(Notification::class.java)?.apply {
+                        doc.toObject(Notification::class.java)?.copy(id = doc.id)?.apply {
                             val docMap = doc.data
                             readCompat = when {
                                 docMap?.get("read") is Boolean -> docMap["read"] as Boolean

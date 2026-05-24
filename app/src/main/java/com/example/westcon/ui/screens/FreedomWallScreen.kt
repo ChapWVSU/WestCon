@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
@@ -42,7 +43,18 @@ import com.example.westcon.ui.WestconPullToRefresh
 @Composable
 fun FreedomWallScreen(onProfileClick: (String) -> Unit = {}) {
     val posts by FirebaseManager.getFreedomPosts().collectAsState(initial = emptyList())
-    val filteredPosts = remember(posts) { posts.filter { it.content.isNotBlank() } }
+    var selectedFilter by remember { mutableStateOf("Recent") }
+    
+    val filteredPosts = remember(posts, selectedFilter) {
+        val baseList = posts.filter { it.content.isNotBlank() }
+        when (selectedFilter) {
+            "Recent" -> baseList.sortedByDescending { it.timestamp }
+            "Most Liked" -> baseList.sortedByDescending { it.likes }
+            "Known Users" -> baseList.filter { !it.isAnonymous }.sortedByDescending { it.timestamp }
+            "Anonymous" -> baseList.filter { it.isAnonymous }.sortedByDescending { it.timestamp }
+            else -> baseList.sortedByDescending { it.timestamp }
+        }
+    }
     val currentUid = FirebaseManager.getCurrentUser()?.uid
     var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -64,7 +76,7 @@ fun FreedomWallScreen(onProfileClick: (String) -> Unit = {}) {
                 .fillMaxSize()
                 .background(Color(0xFFF0F2F5))
         ) {
-            FreedomWallFilters()
+            FreedomWallFilters(selectedFilter) { selectedFilter = it }
             
             if (filteredPosts.isEmpty()) {
                 EmptyFreedomWall()
@@ -466,20 +478,19 @@ fun ColorCircle(colorHex: String, isSelected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun FreedomWallFilters() {
-    val filters = listOf("All Posts", "Tips & Advice", "Rants", "Gratitude")
-    var selectedFilter by remember { mutableStateOf("All Posts") }
+fun FreedomWallFilters(selectedFilter: String, onFilterChange: (String) -> Unit) {
+    val filters = listOf("Recent", "Most Liked", "Known Users", "Anonymous")
 
-    Row(
+    LazyRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        filters.take(2).forEach { filter ->
+        items(filters) { filter ->
             FilterChip(
                 selected = selectedFilter == filter,
-                onClick = { selectedFilter = filter },
+                onClick = { onFilterChange(filter) },
                 label = { Text(filter, fontSize = 12.sp, fontFamily = MomotrustFontFamily) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = WestconDarkBlue,
