@@ -134,6 +134,7 @@ data class ChatSummary(
     // Add isRead for consistency with other models
     @get:PropertyName("isRead") @set:PropertyName("isRead")
     var isRead: Boolean = true,
+    var otherUserOnline: Boolean = false,
     // Firestore documents might have a `typing` field (no `is` prefix). Keep a mutable `typing` field
     // for mapping.
     var typing: Boolean = false

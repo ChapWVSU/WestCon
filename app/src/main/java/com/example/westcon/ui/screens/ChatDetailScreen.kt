@@ -1,7 +1,9 @@
 package com.example.westcon.ui.screens
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,7 +45,8 @@ fun ChatDetailScreen(
     chatId: String,
     otherUserUid: String,
     otherUserName: String,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onProfileClick: (String) -> Unit = {}
 ) {
     val messagesFlow = remember(chatId) { FirebaseManager.getMessages(chatId) }
     val messages by messagesFlow.collectAsState(initial = emptyList())
@@ -54,6 +57,9 @@ fun ChatDetailScreen(
         FirebaseManager.getRelevantExchangeFlow(currentUser?.uid ?: "", otherUserUid) 
     }
     val activeExchange by exchangeFlow.collectAsState(initial = null)
+    
+    val typingFlow = remember(otherUserUid) { FirebaseManager.getTypingStatus(otherUserUid) }
+    val isOtherUserTyping by typingFlow.collectAsState(initial = false)
     
     var showRateDialog by remember { mutableStateOf(false) }
     var showConfirmRating by remember { mutableStateOf(false) }
@@ -75,6 +81,30 @@ fun ChatDetailScreen(
             otherUserProfile = FirebaseManager.getUserProfile(otherUserUid)
             FirebaseManager.markChatAsRead(otherUserUid)
             FirebaseManager.markChatMessagesAsRead(chatId)
+        }
+    }
+    
+    // Typing status logic
+    LaunchedEffect(messageText) {
+        if (otherUserUid.isNotBlank()) {
+            FirebaseManager.setUserTypingStatus(otherUserUid, messageText.isNotBlank())
+            if (messageText.isNotBlank()) {
+                delay(3000) // Clear typing after 3 seconds of inactivity
+                if (messageText.isBlank()) {
+                    FirebaseManager.setUserTypingStatus(otherUserUid, false)
+                }
+            }
+        }
+    }
+    
+    // Clear typing status when leaving the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            scope.launch {
+                if (otherUserUid.isNotBlank()) {
+                    FirebaseManager.setUserTypingStatus(otherUserUid, false)
+                }
+            }
         }
     }
 
@@ -143,7 +173,7 @@ fun ChatDetailScreen(
     }
 
     // Auto-scroll to bottom
-    LaunchedEffect(messages) {
+    LaunchedEffect(messages, isOtherUserTyping) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
@@ -175,7 +205,8 @@ fun ChatDetailScreen(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.1f)),
+                            .background(Color.White.copy(alpha = 0.1f))
+                            .clickable { onProfileClick(otherUserUid) },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -188,7 +219,7 @@ fun ChatDetailScreen(
                     
                     Spacer(modifier = Modifier.width(12.dp))
                     
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f).clickable { onProfileClick(otherUserUid) }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 otherUserName, 
@@ -217,7 +248,15 @@ fun ChatDetailScreen(
                                 }
                             }
                         }
-                        if (activeExchange != null && activeExchange?.status != "DONE") {
+                        if (isOtherUserTyping) {
+                            Text(
+                                "typing...",
+                                fontSize = 10.sp,
+                                color = Color(0xFF4CAF50),
+                                fontWeight = FontWeight.Bold,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                            )
+                        } else if (activeExchange != null && activeExchange?.status != "DONE") {
                             Text(
                                 "Exchange: ${activeExchange?.skillWanted} ↔ ${activeExchange?.skillOffered}",
                                 fontSize = 10.sp,
@@ -264,6 +303,7 @@ fun ChatDetailScreen(
                             val result = FirebaseManager.sendMessage(newMessage, chatId)
                             if (result.isSuccess) {
                                 messageText = ""
+                                FirebaseManager.setUserTypingStatus(otherUserUid, false)
                             }
                         }
                     }
@@ -298,6 +338,12 @@ fun ChatDetailScreen(
                     items(messages) { message ->
                         ChatBubble(message, isCurrentUser = message.senderUid == currentUser?.uid)
                     }
+                    
+                    if (isOtherUserTyping) {
+                        item {
+                            TypingIndicatorBubble()
+                        }
+                    }
                 }
             }
         }
@@ -331,6 +377,7 @@ fun ChatDetailScreen(
 @Composable
 fun ChatBubble(message: Message, isCurrentUser: Boolean) {
     val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(message.timestamp.toDate())
+    val isRead = message.isRead || message.readCompat
     
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -355,14 +402,62 @@ fun ChatBubble(message: Message, isCurrentUser: Boolean) {
                     lineHeight = 20.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    timeStr,
-                    color = if (isCurrentUser) Color.White.copy(alpha = 0.7f) else Color.Gray,
-                    fontSize = 10.sp,
-                    modifier = Modifier.align(Alignment.End),
-                    fontWeight = FontWeight.Medium
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(
+                        timeStr,
+                        color = if (isCurrentUser) Color.White.copy(alpha = 0.7f) else Color.Gray,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (isCurrentUser) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.DoneAll,
+                            contentDescription = if (isRead) "Read" else "Sent",
+                            tint = if (isRead) Color(0xFF34B7F1) else Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+fun TypingIndicatorBubble() {
+    val infiniteTransition = rememberInfiniteTransition(label = "typing")
+    val alpha1 by infiniteTransition.animateFloat(
+        initialValue = 0.2f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(animation = tween(600, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "dot1"
+    )
+    val alpha2 by infiniteTransition.animateFloat(
+        initialValue = 0.2f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(animation = tween(600, delayMillis = 200, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "dot2"
+    )
+    val alpha3 by infiniteTransition.animateFloat(
+        initialValue = 0.2f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(animation = tween(600, delayMillis = 400, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "dot3"
+    )
+
+    Surface(
+        color = Color.White,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 20.dp),
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box(modifier = Modifier.size(6.dp).background(Color.Gray.copy(alpha = alpha1), CircleShape))
+            Box(modifier = Modifier.size(6.dp).background(Color.Gray.copy(alpha = alpha2), CircleShape))
+            Box(modifier = Modifier.size(6.dp).background(Color.Gray.copy(alpha = alpha3), CircleShape))
         }
     }
 }
@@ -384,10 +479,6 @@ fun ChatInputBar(
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { }) {
-                Icon(Icons.Default.AddCircleOutline, contentDescription = "Add", tint = Color.Gray)
-            }
-            
             OutlinedTextField(
                 value = messageText,
                 onValueChange = onMessageChange,
@@ -402,27 +493,25 @@ fun ChatInputBar(
                     focusedTextColor = Color.Black,
                     unfocusedTextColor = Color.Black
                 ),
+                trailingIcon = {
+                    IconButton(
+                        onClick = onSendClick,
+                        enabled = messageText.isNotBlank(),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = Color.Transparent,
+                            contentColor = if (messageText.isNotBlank()) WestconDarkBlue else Color.Gray.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.Send, 
+                            contentDescription = "Send", 
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                },
                 maxLines = 5,
                 singleLine = false
             )
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            IconButton(
-                onClick = onSendClick,
-                enabled = messageText.isNotBlank(),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (messageText.isNotBlank()) WestconDarkBlue else Color.LightGray,
-                    contentColor = Color.White
-                ),
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    Icons.Default.Send, 
-                    contentDescription = "Send", 
-                    modifier = Modifier.size(24.dp)
-                )
-            }
         }
     }
 }

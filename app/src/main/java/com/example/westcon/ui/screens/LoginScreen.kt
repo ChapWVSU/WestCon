@@ -226,18 +226,6 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onSignUpClick: () -> Unit, onBackCli
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Sign Up link
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Don't have an account?", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, fontFamily = MomotrustFontFamily)
-                TextButton(onClick = onSignUpClick) {
-                    Text("Sign Up", color = WestconYellow, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
-                }
-            }
-            
             TextButton(
                 onClick = onBackClick,
                 modifier = Modifier.align(Alignment.CenterHorizontally)

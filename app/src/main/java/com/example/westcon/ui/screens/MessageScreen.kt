@@ -31,7 +31,10 @@ import com.example.westcon.ui.WestconPullToRefresh
 import kotlinx.coroutines.launch
 
 @Composable
-fun MessageScreen(onMessageClick: (String, String, String) -> Unit = { _, _, _ -> }) {
+fun MessageScreen(
+    onMessageClick: (String, String, String) -> Unit = { _, _, _ -> },
+    onProfileClick: (String) -> Unit = {}
+) {
     val summariesFlow = remember { com.example.westcon.data.FirebaseManager.getChatSummaries() }
     val chatSummaries by summariesFlow.collectAsState(initial = emptyList())
     
@@ -112,11 +115,14 @@ fun MessageScreen(onMessageClick: (String, String, String) -> Unit = { _, _, _ -
                 }
             } else {
                 items(filteredSummaries) { summary ->
-                    MessageItem(summary, onClick = {
-                        val currentUidStr = com.example.westcon.data.FirebaseManager.getCurrentUser()?.uid ?: ""
-                        val chatId = if (currentUidStr < summary.otherUserUid) "${currentUidStr}_${summary.otherUserUid}" else "${summary.otherUserUid}_$currentUidStr"
-                        onMessageClick(chatId, summary.otherUserName, summary.otherUserUid)
-                    })
+                    MessageItem(summary, 
+                        onClick = {
+                            val currentUidStr = com.example.westcon.data.FirebaseManager.getCurrentUser()?.uid ?: ""
+                            val chatId = if (currentUidStr < summary.otherUserUid) "${currentUidStr}_${summary.otherUserUid}" else "${summary.otherUserUid}_$currentUidStr"
+                            onMessageClick(chatId, summary.otherUserName, summary.otherUserUid)
+                        },
+                        onProfileClick = { onProfileClick(summary.otherUserUid) }
+                    )
                 }
                 item { Spacer(modifier = Modifier.height(32.dp)) }
             }
@@ -150,7 +156,11 @@ fun MessageSearchBar(value: String, onValueChange: (String) -> Unit) {
 }
 
 @Composable
-fun MessageItem(summary: com.example.westcon.data.ChatSummary, onClick: () -> Unit) {
+fun MessageItem(
+    summary: com.example.westcon.data.ChatSummary, 
+    onClick: () -> Unit,
+    onProfileClick: () -> Unit = {}
+) {
     val timeStr = formatTimestamp(summary.timestamp)
     val departmentColor = when(summary.otherUserDept) {
         "CAS" -> WestconYellow.copy(alpha = 0.2f)
@@ -192,7 +202,9 @@ fun MessageItem(summary: com.example.westcon.data.ChatSummary, onClick: () -> Un
                 Spacer(modifier = Modifier.width(12.dp))
             }
 
-            Box(contentAlignment = Alignment.BottomEnd) {
+            Box(contentAlignment = Alignment.BottomEnd, modifier = Modifier.clickable { onProfileClick() }) {
+                val isOnline by FirebaseManager.getUserOnlineStatus(summary.otherUserUid).collectAsState(initial = false)
+                
                 Box(
                     modifier = Modifier
                         .size(54.dp)
@@ -208,13 +220,16 @@ fun MessageItem(summary: com.example.westcon.data.ChatSummary, onClick: () -> Un
                     )
                 }
                 
-                Surface(
-                    color = Color(0xFF4CAF50),
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .size(14.dp)
-                        .border(2.dp, Color.White, CircleShape)
-                ) {}
+                if (isOnline) {
+                    Surface(
+                        color = Color(0xFF4CAF50),
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .size(14.dp)
+                            .border(2.dp, Color.White, CircleShape)
+                            .shadow(4.dp, CircleShape)
+                    ) {}
+                }
             }
             
             Spacer(modifier = Modifier.width(16.dp))

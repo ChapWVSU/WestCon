@@ -31,7 +31,10 @@ class ChatDetailFragment : BaseFragment() {
             chatId = chatId,
             otherUserUid = otherUserUid,
             otherUserName = userName,
-            onBackClick = { parentFragmentManager.popBackStack() }
+            onBackClick = { parentFragmentManager.popBackStack() },
+            onProfileClick = { uid ->
+                navigateTo(ProfileFragment.newInstance(uid))
+            }
         )
     }
 }

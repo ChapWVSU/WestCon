@@ -60,6 +60,18 @@ object FirebaseManager {
         return try { val query = usersCollection.whereEqualTo("name", username).get().await(); !query.isEmpty } catch (e: Exception) { false }
     }
 
+    fun getUserProfileFlow(uid: String): Flow<UserProfile?> = callbackFlow {
+        val subscription = usersCollection.document(uid)
+            .addSnapshotListener { snapshot, error ->
+                if (error == null && snapshot != null) {
+                    trySend(snapshot.toObject(UserProfile::class.java))
+                } else {
+                    trySend(null)
+                }
+            }
+        awaitClose { subscription.remove() }
+    }
+
     suspend fun saveUserProfile(profile: UserProfile): Result<Unit> {
         return try { usersCollection.document(profile.uid).set(profile).await(); Result.success(Unit) } catch (e: Exception) { Result.failure(e) }
     }
@@ -363,6 +375,21 @@ object FirebaseManager {
         }
     }
 
+    // --- Presence ---
+    fun updateOnlineStatus(isOnline: Boolean) {
+        val uid = auth.currentUser?.uid ?: return
+        db.collection("users").document(uid).update("online", isOnline, "lastActive", com.google.firebase.Timestamp.now())
+    }
+
+    fun getUserOnlineStatus(uid: String): Flow<Boolean> = callbackFlow {
+        val subscription = db.collection("users").document(uid).addSnapshotListener { snapshot, error ->
+            if (error == null && snapshot != null) {
+                trySend(snapshot.getBoolean("online") ?: false)
+            }
+        }
+        awaitClose { subscription.remove() }
+    }
+
     // --- Skill Marketplace ---
     suspend fun postSkill(post: SkillPost): Result<Unit> {
         return try { val ref = skillsCollection.document(); ref.set(post.copy(id = ref.id)).await(); Result.success(Unit) } catch (e: Exception) { Result.failure(e) }
@@ -459,6 +486,29 @@ object FirebaseManager {
     fun getChatSummaries(): Flow<List<ChatSummary>> = callbackFlow {
         val uid = auth.currentUser?.uid ?: return@callbackFlow
         val subscription = chatSummariesCollection.document(uid).collection("chats").orderBy("timestamp", Query.Direction.DESCENDING).addSnapshotListener { snapshot, error -> if (error == null && snapshot != null) trySend(snapshot.documents.mapNotNull { doc -> doc.toObject(ChatSummary::class.java)?.copy(otherUserUid = doc.id)?.apply { val data = doc.data; isRead = when { data?.get("isRead") is Boolean -> data["isRead"] as Boolean; data?.get("lastMessageRead") is Boolean -> data["lastMessageRead"] as Boolean; else -> isRead }; lastMessageRead = isRead } }) }
+        awaitClose { subscription.remove() }
+    }
+
+    suspend fun setUserTypingStatus(otherUid: String, isTyping: Boolean): Result<Unit> {
+        return try {
+            val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Not logged in"))
+            // We update the typing status in the OTHER user's summary of this chat
+            chatSummariesCollection.document(otherUid).collection("chats").document(uid)
+                .update("typing", isTyping).await()
+            Result.success(Unit)
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    fun getTypingStatus(otherUid: String): Flow<Boolean> = callbackFlow {
+        val uid = auth.currentUser?.uid ?: return@callbackFlow
+        // We listen to our own summary of this chat to see if the other user is typing
+        val subscription = chatSummariesCollection.document(uid).collection("chats").document(otherUid)
+            .addSnapshotListener { snapshot, error ->
+                if (error == null && snapshot != null) {
+                    val typing = snapshot.getBoolean("typing") ?: false
+                    trySend(typing)
+                }
+            }
         awaitClose { subscription.remove() }
     }
 

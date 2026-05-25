@@ -38,25 +38,24 @@ class ProfileFragment : BaseFragment() {
                     navigateTo(ChatDetailFragment.newInstance(chatId, authorUid, authorName))
                 }
             },
-            onExchangeClick = { authorUid ->
-                // For now, show a toast or handle exchange request
-                android.widget.Toast.makeText(context, "Exchange request sent!", android.widget.Toast.LENGTH_SHORT).show()
-                
-                // Optional: Send a notification via FirebaseManager if you have a general method
-                lifecycleScope.launch {
-                    val currentUid = com.example.westcon.data.FirebaseManager.getCurrentUser()?.uid ?: ""
-                    val currentUserProfile = com.example.westcon.data.FirebaseManager.getUserProfile(currentUid)
+            onExchangeClick = { authorUid, authorName ->
+                val currentUid = com.example.westcon.data.FirebaseManager.getCurrentUser()?.uid ?: ""
+                if (currentUid != authorUid) {
+                    val chatId = if (currentUid < authorUid) "${currentUid}_${authorUid}" else "${authorUid}_$currentUid"
                     
-                    val notification = com.example.westcon.data.Notification(
-                        receiverUid = authorUid,
-                        senderUid = currentUid,
-                        senderName = currentUserProfile?.name ?: "Someone",
-                        senderIconName = currentUserProfile?.profileIconName ?: "Person",
-                        type = "SKILL_EXCHANGE",
-                        title = "New Exchange Request",
-                        content = "${currentUserProfile?.name ?: "Someone"} wants to exchange skills with you!"
-                    )
-                    com.example.westcon.data.FirebaseManager.sendNotification(notification)
+                    lifecycleScope.launch {
+                        // Send automated message
+                        val introMessage = com.example.westcon.data.Message(
+                            senderUid = currentUid,
+                            receiverUid = authorUid,
+                            text = "Hi $authorName, I'm interested in your skills. Can we discuss a potential skill exchange?",
+                            timestamp = com.google.firebase.Timestamp.now()
+                        )
+                        com.example.westcon.data.FirebaseManager.sendMessage(introMessage, chatId)
+                        
+                        // Navigate to chat
+                        navigateTo(ChatDetailFragment.newInstance(chatId, authorUid, authorName))
+                    }
                 }
             }
         )

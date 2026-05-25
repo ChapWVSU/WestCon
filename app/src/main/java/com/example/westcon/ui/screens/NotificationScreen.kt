@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
@@ -228,49 +228,99 @@ fun NotificationItem(notification: Notification) {
     var isAccepting by remember { mutableStateOf(false) }
     
     if (showAcceptConfirm) {
-        AlertDialog(
-            onDismissRequest = { showAcceptConfirm = false },
-            containerColor = White,
-            title = { Text("Accept Exchange?", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
-            text = { 
-                Text("Are you sure you want to accept this exchange? A new chat will be started with ${notification.senderName}.")
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            isAccepting = true
-                            val result = FirebaseManager.acceptExchangeRequest(notification)
-                            isAccepting = false
-                            if (result.isSuccess) {
-                                showAcceptConfirm = false
-                                showAcceptedDialog = true
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showAcceptConfirm = false }) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .wrapContentHeight(),
+                shape = RoundedCornerShape(28.dp),
+                color = Color.White
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .background(WestconDarkBlue.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = WestconDarkBlue,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Text(
+                        "Accept Exchange?",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = WestconDarkBlue,
+                        fontFamily = MomotrustFontFamily
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Text(
+                        "Are you sure you want to accept this exchange? A new chat will be started with ${notification.senderName}.",
+                        textAlign = TextAlign.Center,
+                        color = Color.DarkGray,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAcceptConfirm = false },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9ECEF)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Cancel", color = Color.Gray, fontWeight = FontWeight.Bold)
+                        }
+                        
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    isAccepting = true
+                                    val result = FirebaseManager.acceptExchangeRequest(notification)
+                                    isAccepting = false
+                                    if (result.isSuccess) {
+                                        showAcceptConfirm = false
+                                        showAcceptedDialog = true
+                                    }
+                                }
+                            },
+                            enabled = !isAccepting,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                        ) {
+                            if (isAccepting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("Accept", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
-                    },
-                    enabled = !isAccepting,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = WestconDarkBlue,
-                        contentColor = Color.White
-                    )
-                ) {
-                    if (isAccepting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("Accept", color = Color.White)
                     }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAcceptConfirm = false }) {
-                    Text("Cancel")
-                }
             }
-        )
+        }
     }
 
     if (showAcceptedDialog) {
@@ -304,33 +354,85 @@ fun NotificationItem(notification: Notification) {
     }
 
     if (showDeclineConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeclineConfirm = false },
-            containerColor = White,
-            title = { Text("Decline Request?", fontWeight = FontWeight.Bold, color = Color.Red) },
-            text = { Text("Are you sure you want to decline this exchange request? This will remove the notification.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            FirebaseManager.deleteNotification(notification.id)
-                            showDeclineConfirm = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Red,
-                        contentColor = Color.White
-                    )
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showDeclineConfirm = false }) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .wrapContentHeight(),
+                shape = RoundedCornerShape(28.dp),
+                color = Color.White
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Decline")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeclineConfirm = false }) {
-                    Text("Cancel")
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .background(WestconDarkBlue.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Cancel,
+                            contentDescription = null,
+                            tint = WestconDarkBlue,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Text(
+                        "Decline Request?",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = WestconDarkBlue,
+                        fontFamily = MomotrustFontFamily
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Text(
+                        "Are you sure you want to decline this exchange request? This will remove the notification.",
+                        textAlign = TextAlign.Center,
+                        color = Color.Gray,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showDeclineConfirm = false },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9ECEF)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Cancel", color = Color.Gray, fontWeight = FontWeight.Bold)
+                        }
+                        
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    FirebaseManager.deleteNotification(notification.id)
+                                    showDeclineConfirm = false
+                                }
+                            },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                        ) {
+                            Text("Decline", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 
     Card(

@@ -11,6 +11,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -137,6 +141,8 @@ fun ProfileHeaderCard(
             modifier = Modifier.fillMaxWidth().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            val isOnline by FirebaseManager.getUserOnlineStatus(profile.uid).collectAsState(initial = false)
+            
             Box(contentAlignment = Alignment.BottomEnd) {
                 Box(
                     modifier = Modifier
@@ -155,15 +161,27 @@ fun ProfileHeaderCard(
                         tint = WestconDarkBlue
                     )
                 }
-                Surface(
-                    color = WestconDarkBlue,
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .size(30.dp)
-                        .offset(x = (-4).dp, y = (-4).dp)
-                        .border(3.dp, Color.White, CircleShape)
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = "Verified", tint = Color.White, modifier = Modifier.padding(6.dp))
+                
+                if (isOnline) {
+                    Surface(
+                        color = Color(0xFF4CAF50),
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .border(3.dp, Color.White, CircleShape)
+                            .shadow(8.dp, CircleShape)
+                    ) {}
+                } else {
+                    Surface(
+                        color = WestconDarkBlue,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .size(30.dp)
+                            .offset(x = (-4).dp, y = (-4).dp)
+                            .border(3.dp, Color.White, CircleShape)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = "Verified", tint = Color.White, modifier = Modifier.padding(6.dp))
+                    }
                 }
             }
 
@@ -231,7 +249,7 @@ fun ProfileHeaderCard(
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Message, 
+                            imageVector = Icons.AutoMirrored.Filled.Message, 
                             contentDescription = null, 
                             modifier = Modifier.size(18.dp),
                             tint = Color.White
@@ -404,7 +422,7 @@ fun EditableTeachableSkillsSection(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(
-                        onClick = onAddSkill,
+                        onClick = { onAddSkill() },
                         modifier = Modifier.background(WestconYellow, CircleShape).size(48.dp)
                     ) { Icon(Icons.Default.Add, contentDescription = "Add", tint = WestconDarkBlue) }
                 }
@@ -415,27 +433,83 @@ fun EditableTeachableSkillsSection(
             if (skills.isEmpty()) {
                 Text("No skills listed yet. Add something you can share with others!", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             } else {
-                FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    skills.forEach { skill ->
+                // Sort skills: move long named skills to the bottom
+                val sortedSkills = remember(skills.size) { 
+                    skills.sortedBy { it.skillName.length } 
+                }
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    sortedSkills.forEach { skill ->
                         Surface(
                             color = Color.White.copy(alpha = 0.12f), 
                             shape = RoundedCornerShape(16.dp), 
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .widthIn(min = 140.dp)
+                                .padding(vertical = 2.dp)
                         ) {
-                            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(skill.skillName, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, fontFamily = MomotrustFontFamily)
+                            Column(
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalAlignment = Alignment.Start
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        skill.skillName, 
+                                        color = Color.White, 
+                                        fontSize = 13.sp, 
+                                        fontWeight = FontWeight.Bold, 
+                                        fontFamily = MomotrustFontFamily,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    
                                     if (isEditing) {
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Icon(Icons.Default.Close, contentDescription = "Remove", tint = WestconYellow, modifier = Modifier.size(16.dp).clickable { onRemoveSkill(skill) })
+                                        IconButton(
+                                            onClick = { onRemoveSkill(skill) },
+                                            modifier = Modifier.size(18.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Close, 
+                                                contentDescription = "Remove", 
+                                                tint = WestconYellow, 
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
                                     }
                                 }
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                                    Icon(Icons.Default.Star, contentDescription = null, tint = WestconYellow, modifier = Modifier.size(12.dp))
+                                
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Star, 
+                                        contentDescription = null, 
+                                        tint = WestconYellow, 
+                                        modifier = Modifier.size(10.dp)
+                                    )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     val ratingText = if (skill.totalRatings > 0) String.format("%.1f", skill.averageRating) else "New"
-                                    Text(ratingText, color = WestconYellow, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        ratingText, 
+                                        color = WestconYellow, 
+                                        fontSize = 10.sp, 
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    
                                     Text(
                                         when(skill.level) {
                                             1 -> "Novice"
@@ -446,8 +520,9 @@ fun EditableTeachableSkillsSection(
                                             else -> "Novice"
                                         },
                                         color = Color.White.copy(alpha = 0.7f),
-                                        fontSize = 11.sp,
-                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                        fontSize = 10.sp,
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                        maxLines = 1
                                     )
                                 }
                             }
@@ -483,7 +558,7 @@ fun EditableLearningSkillsSection(
         Column(modifier = Modifier.padding(20.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.TrendingUp, contentDescription = null, tint = WestconDarkBlue, modifier = Modifier.size(22.dp))
+                    Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = WestconDarkBlue, modifier = Modifier.size(22.dp))
                     Spacer(modifier = Modifier.width(10.dp))
                     Text("Skills I'm Learning", fontWeight = FontWeight.Bold, color = WestconDarkBlue, fontSize = 18.sp, fontFamily = MomotrustFontFamily)
                 }
@@ -545,7 +620,7 @@ fun EditableLearningSkillsSection(
                                 onClick = { onMarkDone(skillItem) },
                                 modifier = Modifier.height(32.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF4CAF50))
+                                colors = ButtonDefaults.buttonColors(contentColor = Color(0xFF4CAF50))
                             ) {
                                 Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -580,7 +655,7 @@ fun ProfileScreen(
     onLogoutClick: () -> Unit = {},
     onBackClick: (() -> Unit)? = null,
     onMessageClick: (String, String) -> Unit = { _, _ -> },
-    onExchangeClick: (String) -> Unit = {}
+    onExchangeClick: (String, String) -> Unit = { _, _ -> }
 ) {
     var userProfile by remember { mutableStateOf<UserProfile?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -755,7 +830,7 @@ fun ProfileScreen(
 
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = if (onBackClick != null) 200.dp else 140.dp, bottom = 48.dp)
+                    contentPadding = PaddingValues(top = if (onBackClick != null) 150.dp else 60.dp, bottom = 48.dp)
                 ) {
                     item { 
                         ProfileHeaderCard(
@@ -765,7 +840,7 @@ fun ProfileScreen(
                                 saveProfile(profile.copy(profileIconName = newIcon))
                             },
                             onMessageClick = { onMessageClick(profile.uid, profile.name) },
-                            onExchangeClick = { onExchangeClick(profile.uid) }
+                            onExchangeClick = { onExchangeClick(profile.uid, profile.name) }
                         ) 
                     }
                 
@@ -857,25 +932,80 @@ fun ProfileScreen(
                         item {
                             var showLogoutConfirm by remember { mutableStateOf(false) }
                             if (showLogoutConfirm) {
-                                AlertDialog(
-                                    onDismissRequest = { showLogoutConfirm = false },
-                                    containerColor = Color.White,
-                                    title = { Text("Log Out", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
-                                    text = { Text("Are you sure you want to log out of your WestCon account?") },
-                                    confirmButton = {
-                                        Button(
-                                            onClick = onLogoutClick,
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE57373))
+                                androidx.compose.ui.window.Dialog(onDismissRequest = { showLogoutConfirm = false }) {
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.9f)
+                                            .wrapContentHeight(),
+                                        shape = RoundedCornerShape(28.dp),
+                                        color = Color.White
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(24.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
-                                            Text("Log Out", color = Color.White)
-                                        }
-                                    },
-                                    dismissButton = {
-                                        TextButton(onClick = { showLogoutConfirm = false }) {
-                                            Text("Cancel", color = Color.Gray)
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(64.dp)
+                                                    .background(WestconDarkBlue.copy(alpha = 0.1f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    Icons.AutoMirrored.Filled.Logout,
+                                                    contentDescription = null,
+                                                    tint = WestconDarkBlue,
+                                                    modifier = Modifier.size(32.dp)
+                                                )
+                                            }
+                                            
+                                            Spacer(modifier = Modifier.height(20.dp))
+                                            
+                                            Text(
+                                                "Logging Out?",
+                                                fontSize = 20.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = WestconDarkBlue,
+                                                fontFamily = MomotrustFontFamily
+                                            )
+                                            
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            
+                                            Text(
+                                                "Are you sure you want to log out of your WestCon account?",
+                                                textAlign = TextAlign.Center,
+                                                color = Color.Gray,
+                                                fontSize = 14.sp,
+                                                lineHeight = 20.sp
+                                            )
+                                            
+                                            Spacer(modifier = Modifier.height(32.dp))
+                                            
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                OutlinedButton(
+                                                    onClick = { showLogoutConfirm = false },
+                                                    modifier = Modifier.weight(1f).height(48.dp),
+                                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9ECEF)),
+                                                    shape = RoundedCornerShape(12.dp)
+                                                ) {
+                                                    Text("Cancel", color = Color.Gray, fontWeight = FontWeight.Bold)
+                                                }
+                                                
+                                                Button(
+                                                    onClick = onLogoutClick,
+                                                    modifier = Modifier.weight(1f).height(48.dp),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue),
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                                                ) {
+                                                    Text("Log Out", color = Color.White, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
                                         }
                                     }
-                                )
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
@@ -887,7 +1017,7 @@ fun ProfileScreen(
                                 shape = RoundedCornerShape(16.dp),
                                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
                             ) {
-                                Icon(Icons.Default.Logout, contentDescription = null, tint = Color(0xFFE57373))
+                                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = Color(0xFFE57373))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Log Out", color = Color(0xFFE57373), fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
                             }
@@ -922,7 +1052,7 @@ fun ProfileScreen(
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        imageVector = Icons.Default.ArrowBack,
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back",
                                         tint = WestconDarkBlue,
                                         modifier = Modifier.size(24.dp)

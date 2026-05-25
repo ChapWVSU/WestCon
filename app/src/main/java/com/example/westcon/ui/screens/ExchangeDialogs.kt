@@ -209,11 +209,11 @@ fun ExchangeDialog(targetPost: com.example.westcon.data.SkillPost, onDismiss: ()
                     }
                 },
                 enabled = !isLoading && offeredSkill.isNotBlank() && wantedSkill.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue, contentColor = Color.White),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                else Text("Send Request", fontWeight = FontWeight.Bold)
+                else Text("Send Request", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

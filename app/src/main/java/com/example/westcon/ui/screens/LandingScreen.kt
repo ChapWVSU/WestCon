@@ -31,7 +31,7 @@ fun LandingScreen(onSignUpClick: () -> Unit, onLoginClick: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 24.dp)
-                .padding(top = 150.dp),
+                .padding(top = 220.dp),
             horizontalAlignment = Alignment.Start
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

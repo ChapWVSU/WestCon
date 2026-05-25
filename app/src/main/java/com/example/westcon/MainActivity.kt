@@ -12,7 +12,7 @@ import com.google.firebase.FirebaseApp
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        
         // Initialize Firebase early so FirebaseAuth/Firestore can find the default app config.
         if (FirebaseApp.getApps(this).isEmpty()) {
             FirebaseApp.initializeApp(this)

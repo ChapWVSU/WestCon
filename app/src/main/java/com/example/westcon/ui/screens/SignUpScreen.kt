@@ -184,8 +184,14 @@ fun RegisterScreen(onJoinClick: (String, String) -> Unit, onBackClick: () -> Uni
                             errorMessage = "Passwords do not match"
                             return@Button
                         }
-                        if (password.length < 6) {
-                            errorMessage = "Password should be at least 6 characters"
+                        
+                        val hasUppercase = password.any { it.isUpperCase() }
+                        val hasLowercase = password.any { it.isLowerCase() }
+                        val hasDigit = password.any { it.isDigit() }
+                        val hasSpecial = password.any { !it.isLetterOrDigit() }
+                        
+                        if (password.length < 8 || !hasUppercase || !hasLowercase || !hasDigit || !hasSpecial) {
+                            errorMessage = "Password must be at least 8 characters and contain 1 uppercase, 1 lowercase, 1 number, and 1 special character"
                             return@Button
                         }
                         

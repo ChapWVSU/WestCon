@@ -28,15 +28,18 @@ data class OnboardingPage(
 val onboardingPages = listOf(
     OnboardingPage(
         "",
-        "Connect and interact with fellow Taga-Wests."
+        "Connect and interact with fellow Taga-Wests.",
+        com.example.westcon.R.drawable.image_1
     ),
     OnboardingPage(
         "",
-        "Share skills and expand your network with Taga-Wests."
+        "Share skills and expand your network with Taga-Wests.",
+        com.example.westcon.R.drawable.image_2
     ),
     OnboardingPage(
         "",
-        "Join the community and make WVSU the best."
+        "Join the community and make WVSU the best.",
+        com.example.westcon.R.drawable.image_3
     )
 )
 
@@ -55,18 +58,18 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     ) {
         Spacer(modifier = Modifier.height(100.dp))
 
-        // Image Placeholder (Stationary)
+        // Dynamic Image Area (Changes with Pager)
         Box(
             modifier = Modifier
-                .size(280.dp)
-                .background(Color(0xFFE9ECEF), RoundedCornerShape(20.dp)),
+                .fillMaxWidth()
+                .height(340.dp),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                painter = painterResource(id = com.example.westcon.R.drawable.icon),
+            val currentPage = onboardingPages[pagerState.currentPage]
+            androidx.compose.foundation.Image(
+                painter = painterResource(id = currentPage.imageRes ?: com.example.westcon.R.drawable.icon),
                 contentDescription = null,
-                tint = WestconYellow,
-                modifier = Modifier.size(160.dp)
+                modifier = Modifier.size(320.dp)
             )
         }
 

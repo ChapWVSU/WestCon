@@ -56,6 +56,37 @@ fun DashboardScreen(
     val notificationsFlow = remember { FirebaseManager.getNotifications() }
     val notifications by notificationsFlow.collectAsState(initial = emptyList())
     val hasUnread = notifications.any { !it.isActuallyRead }
+    
+    // Bottom nav badges logic
+    val chatSummariesFlow = remember { FirebaseManager.getChatSummaries() }
+    val chatSummaries by chatSummariesFlow.collectAsState(initial = emptyList())
+    val hasUnreadMessages = chatSummaries.any { !it.isActuallyRead }
+    
+    val freedomPostsFlow = remember { FirebaseManager.getFreedomPosts() }
+    val freedomPosts by freedomPostsFlow.collectAsState(initial = emptyList())
+    // For freedom, we could check if there's a post newer than user's last visit, 
+    // but for now let's just show a badge if there are posts at all as a simple implementation.
+    // Or better, if there are posts from the last 24 hours.
+    val hasNewFreedom = remember(freedomPosts) {
+        val yesterday = com.google.firebase.Timestamp(System.currentTimeMillis() / 1000 - 86400, 0)
+        freedomPosts.any { it.timestamp.seconds > yesterday.seconds }
+    }
+
+    // Update online status
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                FirebaseManager.updateOnlineStatus(true)
+            } else if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
+                FirebaseManager.updateOnlineStatus(false)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Scaffold(
         topBar = { 
@@ -74,7 +105,12 @@ fun DashboardScreen(
             ) 
         },
         bottomBar = { 
-            DashboardBottomNav(selectedTab) { selectedTab = it }
+            DashboardBottomNav(
+                selectedTab = selectedTab, 
+                onTabSelected = { selectedTab = it },
+                hasUnreadMessages = hasUnreadMessages,
+                hasNewFreedom = hasNewFreedom
+            )
         },
         floatingActionButton = {
             if (selectedTab == 0 || selectedTab == 1) {
@@ -101,12 +137,12 @@ fun DashboardScreen(
                     onProfileClick = onProfileClick
                 )
                 1 -> FreedomWallScreen(onProfileClick = onProfileClick)
-                2 -> MessageScreen(onMessageClick = onMessageClick)
+                2 -> MessageScreen(onMessageClick = onMessageClick, onProfileClick = onProfileClick)
                 3 -> ProfileScreen(onLogoutClick = onLogoutClick, onMessageClick = { uid, name ->
                     val currentUid = FirebaseManager.getCurrentUser()?.uid ?: ""
                     val chatId = if (currentUid < uid) "${currentUid}_$uid" else "${uid}_$currentUid"
                     onMessageClick(chatId, name, uid)
-                }, onExchangeClick = { targetUid ->
+                }, onExchangeClick = { targetUid, targetName ->
                     // Exchange initiation handled via marketplace
                 })
                 else -> {
@@ -687,7 +723,7 @@ fun DashboardTopBar(
                     Icon(
                         painter = painterResource(id = com.example.westcon.R.drawable.icon),
                         contentDescription = null,
-                        tint = White,
+                        tint = WestconYellow,
                         modifier = Modifier.size(36.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -904,19 +940,34 @@ fun SkillPostCard(
                         .clickable(enabled = !post.isAnonymous) { onProfileClick() },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(if (post.isAnonymous) WestconDarkBlue else Color(0xFFF1F5F9)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            if (post.isAnonymous) Icons.Default.VisibilityOff else UIUtils.getProfileIcon(post.authorIconName),
-                            contentDescription = null,
-                            tint = if (post.isAnonymous) White else WestconDarkBlue,
-                            modifier = Modifier.size(22.dp)
-                        )
+                    Box(contentAlignment = Alignment.BottomEnd) {
+                        val isOnline by FirebaseManager.getUserOnlineStatus(post.authorUid).collectAsState(initial = false)
+                        
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(if (post.isAnonymous) WestconDarkBlue else Color(0xFFF1F5F9)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                if (post.isAnonymous) Icons.Default.VisibilityOff else UIUtils.getProfileIcon(post.authorIconName),
+                                contentDescription = null,
+                                tint = if (post.isAnonymous) White else WestconDarkBlue,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        
+                        if (!post.isAnonymous && isOnline) {
+                            Surface(
+                                color = Color(0xFF4CAF50),
+                                shape = CircleShape,
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .border(1.5.dp, Color.White, CircleShape)
+                                    .shadow(4.dp, CircleShape)
+                            ) {}
+                        }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
@@ -1040,10 +1091,15 @@ fun SkillPostCard(
 }
 
 @Composable
-fun DashboardBottomNav(selectedTab: Int, onTabSelected: (Int) -> Unit) {
+fun DashboardBottomNav(
+    selectedTab: Int, 
+    onTabSelected: (Int) -> Unit,
+    hasUnreadMessages: Boolean = false,
+    hasNewFreedom: Boolean = false
+) {
     NavigationBar(
-        containerColor = WestconDarkBlue,
-        tonalElevation = 8.dp
+        containerColor = Color(0xFFF0F2F5), // Match the grey background color
+        tonalElevation = 0.dp // Remove elevation for a flatter look
     ) {
         val items = listOf(
             Triple("HOME", Icons.Default.Home, 0),
@@ -1053,17 +1109,32 @@ fun DashboardBottomNav(selectedTab: Int, onTabSelected: (Int) -> Unit) {
         )
         
         items.forEach { (label, icon, index) ->
+            val hasBadge = (index == 1 && hasNewFreedom) || (index == 2 && hasUnreadMessages)
+            
             NavigationBarItem(
                 selected = selectedTab == index,
                 onClick = { onTabSelected(index) },
-                icon = { Icon(icon, contentDescription = label) },
+                icon = { 
+                    BadgedBox(
+                        badge = {
+                            if (hasBadge) {
+                                Badge(
+                                    containerColor = if (index == 2) Color.Red else WestconYellow,
+                                    modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
+                                )
+                            }
+                        }
+                    ) {
+                        Icon(icon, contentDescription = label)
+                    }
+                },
                 label = { Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = WestconYellow,
-                    unselectedIconColor = White.copy(alpha = 0.5f),
-                    selectedTextColor = WestconYellow,
-                    unselectedTextColor = White.copy(alpha = 0.5f),
-                    indicatorColor = Color.Transparent
+                    unselectedIconColor = Color.Gray,
+                    selectedTextColor = WestconDarkBlue,
+                    unselectedTextColor = Color.Gray,
+                    indicatorColor = WestconDarkBlue // This creates the circular blue background
                 )
             )
         }
