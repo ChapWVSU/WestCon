@@ -85,7 +85,8 @@ fun ExchangeDialog(targetPost: com.example.westcon.data.SkillPost, onDismiss: ()
 
                     OutlinedTextField(
                         value = offeredSkill,
-                        onValueChange = { offeredSkill = it },
+                        onValueChange = { },
+                        readOnly = true,
                         label = { Text("Offer this skill") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -132,7 +133,8 @@ fun ExchangeDialog(targetPost: com.example.westcon.data.SkillPost, onDismiss: ()
 
                     OutlinedTextField(
                         value = offeredSkill,
-                        onValueChange = { offeredSkill = it },
+                        onValueChange = { },
+                        readOnly = true,
                         label = { Text("Offer this skill") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -212,13 +214,13 @@ fun ExchangeDialog(targetPost: com.example.westcon.data.SkillPost, onDismiss: ()
                 colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue, contentColor = Color.White),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = WestconYellow, strokeWidth = 2.dp)
                 else Text("Send Request", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color.Gray)
+                Text("Cancel", color = WestconDarkBlue, fontWeight = FontWeight.Bold)
             }
         }
     )
@@ -363,20 +365,26 @@ fun RateUserDialog(
                 ) {
                     TextButton(
                         onClick = onDismiss,
-                        modifier = Modifier.weight(1f).height(52.dp),
+                        modifier = Modifier.weight(0.8f).height(52.dp),
                         shape = RoundedCornerShape(14.dp)
                     ) {
-                        Text("Later", color = Color.Gray, fontWeight = FontWeight.Bold)
+                        Text("Later", color = WestconDarkBlue, fontWeight = FontWeight.Bold)
                     }
                     
                     Button(
                         onClick = { onRateSubmitted(teachingRating, learningRating, skillTheyTaught, skillTheyLearned) },
                         enabled = otherUserMarkedDone,
-                        modifier = Modifier.weight(1.5f).height(52.dp),
+                        modifier = Modifier.weight(2f).height(52.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp)
                     ) {
-                        Text("Submit Feedback", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(
+                            "Submit Feedback", 
+                            fontWeight = FontWeight.Bold, 
+                            color = Color.White,
+                            maxLines = 1
+                        )
                     }
                 }
             }

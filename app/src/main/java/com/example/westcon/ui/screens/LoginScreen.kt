@@ -2,6 +2,8 @@ package com.example.westcon.ui.screens
 
 import com.example.westcon.R
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -42,199 +44,201 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onSignUpClick: () -> Unit, onBackCli
                 .fillMaxSize()
                 .padding(horizontal = 24.dp)
                 .statusBarsPadding()
-                .padding(top = 100.dp),
+                .padding(top = 100.dp, bottom = 80.dp),
             horizontalAlignment = Alignment.Start
         ) {
-            // Yellow Cap Icon
-            Icon(
-                painter = painterResource(id = R.drawable.icon),
-                contentDescription = null,
-                tint = WestconYellow,
-                modifier = Modifier.size(130.dp)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                // Yellow Cap Icon
+                Icon(
+                    painter = painterResource(id = R.drawable.icon),
+                    contentDescription = null,
+                    tint = WestconYellow,
+                    modifier = Modifier.size(130.dp)
+                )
 
-            Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-            // Title Text
-            Text(
-                text = "Welcome Back,\nTaga-WEST!",
-                color = Color.White,
-                fontSize = 42.sp,
-                lineHeight = 48.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = MomotrustFontFamily,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
+                // Title Text
+                Text(
+                    text = "Welcome Back,\nTaga-WEST!",
+                    color = Color.White,
+                    fontSize = 42.sp,
+                    lineHeight = 48.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = MomotrustFontFamily,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
 
-            if (errorMessage != null) {
-                Text(errorMessage!!, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp))
-            }
-
-            Spacer(modifier = Modifier.height(0.dp))
-
-            // Fields
-            SignUpTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = "WVSU email",
-                icon = R.drawable.email
-            )
-
-            SignUpTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = "Password",
-                icon = R.drawable.lock,
-                isPassword = true,
-                showEyeIcon = true
-            )
-
-            // Forgot Password Section
-            var showForgotDialog by remember { mutableStateOf(false) }
-            var resetEmail by remember { mutableStateOf("") }
-            var isResetting by remember { mutableStateOf(false) }
-            var resetMessage by remember { mutableStateOf<String?>(null) }
-            var resetCooldown by remember { mutableIntStateOf(0) }
-
-            LaunchedEffect(resetCooldown) {
-                if (resetCooldown > 0) {
-                    delay(1000)
-                    resetCooldown--
+                if (errorMessage != null) {
+                    Text(errorMessage!!, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp))
                 }
-            }
 
-            if (showForgotDialog) {
-                AlertDialog(
-                    onDismissRequest = { if (!isResetting) showForgotDialog = false },
-                    containerColor = Color.White,
-                    title = { Text("Reset Password", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
-                    text = {
-                        Column {
-                            Text("Enter your WVSU email to receive a password reset link.", fontSize = 14.sp, color = Color.DarkGray)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            OutlinedTextField(
-                                value = resetEmail,
-                                onValueChange = { resetEmail = it },
-                                placeholder = { Text("email@wvsu.edu.ph", color = Color.Gray.copy(alpha = 0.5f)) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = WestconDarkBlue,
-                                    unfocusedTextColor = WestconDarkBlue,
-                                    focusedBorderColor = WestconDarkBlue,
-                                    unfocusedBorderColor = Color.LightGray
-                                ),
-                                singleLine = true,
-                                enabled = !isResetting
-                            )
-                            if (resetMessage != null) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(resetMessage!!, color = if (resetMessage!!.contains("sent")) Color(0xFF4CAF50) else Color.Red, fontSize = 12.sp)
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                if (resetEmail.isBlank() || !resetEmail.endsWith("@wvsu.edu.ph")) {
-                                    resetMessage = "Please enter a valid WVSU email"
-                                    return@Button
+                Spacer(modifier = Modifier.height(0.dp))
+
+                // Fields
+                SignUpTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = "WVSU email",
+                    icon = R.drawable.email
+                )
+
+                SignUpTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = "Password",
+                    icon = R.drawable.lock,
+                    isPassword = true,
+                    showEyeIcon = true
+                )
+
+                // Forgot Password Section
+                var showForgotDialog by remember { mutableStateOf(false) }
+                var resetEmail by remember { mutableStateOf("") }
+                var isResetting by remember { mutableStateOf(false) }
+                var resetMessage by remember { mutableStateOf<String?>(null) }
+                var resetCooldown by remember { mutableIntStateOf(0) }
+
+                LaunchedEffect(resetCooldown) {
+                    if (resetCooldown > 0) {
+                        delay(1000)
+                        resetCooldown--
+                    }
+                }
+
+                if (showForgotDialog) {
+                    AlertDialog(
+                        onDismissRequest = { if (!isResetting) showForgotDialog = false },
+                        containerColor = Color.White,
+                        title = { Text("Reset Password", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
+                        text = {
+                            Column {
+                                Text("Enter your WVSU email to receive a password reset link.", fontSize = 14.sp, color = Color.DarkGray)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                OutlinedTextField(
+                                    value = resetEmail,
+                                    onValueChange = { resetEmail = it },
+                                    placeholder = { Text("email@wvsu.edu.ph", color = Color.Gray.copy(alpha = 0.5f)) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = WestconDarkBlue,
+                                        unfocusedTextColor = WestconDarkBlue,
+                                        focusedBorderColor = WestconDarkBlue,
+                                        unfocusedBorderColor = Color.LightGray
+                                    ),
+                                    singleLine = true,
+                                    enabled = !isResetting
+                                )
+                                if (resetMessage != null) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(resetMessage!!, color = if (resetMessage!!.contains("sent")) Color(0xFF4CAF50) else Color.Red, fontSize = 12.sp)
                                 }
-                                isResetting = true
-                                scope.launch {
-                                    val result = FirebaseManager.sendPasswordResetEmail(resetEmail)
-                                    isResetting = false
-                                    if (result.isSuccess) {
-                                        resetMessage = "Reset password email sent! Please check your inbox and spam folder."
-                                        resetCooldown = 60
-                                    } else {
-                                        resetMessage = result.exceptionOrNull()?.message ?: "Failed to send reset email"
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    if (resetEmail.isBlank() || !resetEmail.endsWith("@wvsu.edu.ph")) {
+                                        resetMessage = "Please enter a valid WVSU email"
+                                        return@Button
                                     }
+                                    isResetting = true
+                                    scope.launch {
+                                        val result = FirebaseManager.sendPasswordResetEmail(resetEmail)
+                                        isResetting = false
+                                        if (result.isSuccess) {
+                                            resetMessage = "Reset password email sent! Please check your inbox and spam folder."
+                                            resetCooldown = 60
+                                        } else {
+                                            resetMessage = result.exceptionOrNull()?.message ?: "Failed to send reset email"
+                                        }
+                                    }
+                                },
+                                enabled = !isResetting && resetCooldown == 0,
+                                colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)
+                            ) {
+                                if (isResetting) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = WestconYellow)
+                                else Text(if (resetCooldown > 0) "Resend in ${resetCooldown}s" else "Send Reset Link", color = WestconYellow)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showForgotDialog = false; resetMessage = null }, enabled = !isResetting) {
+                                Text("Cancel", color = Color.Gray)
+                            }
+                        }
+                    )
+                }
+
+                // Forgot Password Link
+                TextButton(
+                    onClick = { showForgotDialog = true },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(
+                        "Forgot password?",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 12.sp,
+                        fontFamily = MomotrustFontFamily
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = {
+                        if (email.isEmpty() || password.isEmpty()) {
+                            errorMessage = "Please fill all fields"
+                            return@Button
+                        }
+                        isLoading = true
+                        errorMessage = null
+                        scope.launch {
+                            val result = FirebaseManager.login(email, password)
+                            isLoading = false
+                            if (result.isSuccess) {
+                                if (FirebaseManager.isEmailVerified()) {
+                                    onLoginSuccess()
+                                } else {
+                                    errorMessage = "Email not verified. Please check your inbox and spam folder."
+                                    FirebaseManager.logout()
                                 }
-                            },
-                            enabled = !isResetting && resetCooldown == 0,
-                            colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)
-                        ) {
-                            if (isResetting) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = WestconYellow)
-                            else Text(if (resetCooldown > 0) "Resend in ${resetCooldown}s" else "Send Reset Link", color = WestconYellow)
+                            } else {
+                                val exception = result.exceptionOrNull()
+                                errorMessage = when {
+                                    exception?.message?.contains("invalid-credential") == true -> "Invalid email or password"
+                                    exception?.message?.contains("user-not-found") == true -> "Account not found"
+                                    else -> exception?.message ?: "Login failed"
+                                }
+                            }
                         }
                     },
-                    dismissButton = {
-                        TextButton(onClick = { showForgotDialog = false; resetMessage = null }, enabled = !isResetting) {
-                            Text("Cancel", color = Color.Gray)
-                        }
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp),
+                    enabled = !isLoading,
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF001D3D)) // Dark Navy
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(color = WestconYellow, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text("Login", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
                     }
-                )
-            }
-
-            // Forgot Password Link
-            TextButton(
-                onClick = { showForgotDialog = true },
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text(
-                    "Forgot password?",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 12.sp,
-                    fontFamily = MomotrustFontFamily
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = {
-                    if (email.isEmpty() || password.isEmpty()) {
-                        errorMessage = "Please fill all fields"
-                        return@Button
-                    }
-                    isLoading = true
-                    errorMessage = null
-                    scope.launch {
-                        val result = FirebaseManager.login(email, password)
-                        isLoading = false
-                        if (result.isSuccess) {
-                            if (FirebaseManager.isEmailVerified()) {
-                                onLoginSuccess()
-                            } else {
-                                errorMessage = "Email not verified. Please check your inbox and spam folder."
-                                FirebaseManager.logout()
-                            }
-                        } else {
-                            val exception = result.exceptionOrNull()
-                            errorMessage = when {
-                                exception?.message?.contains("invalid-credential") == true -> "Invalid email or password"
-                                exception?.message?.contains("user-not-found") == true -> "Account not found"
-                                else -> exception?.message ?: "Login failed"
-                            }
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp),
-                enabled = !isLoading,
-                shape = RoundedCornerShape(20.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF001D3D)) // Dark Navy
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(color = WestconYellow, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("Login", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
                 }
-            }
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            TextButton(
-                onClick = onBackClick,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            ) {
-                Text(
-                    "Go Back", 
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontFamily = MomotrustFontFamily
-                )
+                TextButton(
+                    onClick = onBackClick,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(
+                        "Go Back", 
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontFamily = MomotrustFontFamily
+                    )
+                }
             }
         }
 

@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import com.example.westcon.ui.theme.*
 import com.example.westcon.data.*
 import com.example.westcon.data.FirebaseManager
@@ -222,6 +224,7 @@ fun EmptyNotifications(filter: String) {
 fun NotificationItem(notification: Notification) {
     val timeAgo = UIUtils.formatTimestamp(notification.timestamp)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var showAcceptConfirm by remember { mutableStateOf(false) }
     var showDeclineConfirm by remember { mutableStateOf(false) }
     var showAcceptedDialog by remember { mutableStateOf(false) }
@@ -296,6 +299,7 @@ fun NotificationItem(notification: Notification) {
                                     val result = FirebaseManager.acceptExchangeRequest(notification)
                                     isAccepting = false
                                     if (result.isSuccess) {
+                                        Toast.makeText(context, "Skill exchange accepted!", Toast.LENGTH_SHORT).show()
                                         showAcceptConfirm = false
                                         showAcceptedDialog = true
                                     }
@@ -310,7 +314,7 @@ fun NotificationItem(notification: Notification) {
                             if (isAccepting) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
-                                    color = Color.White,
+                                    color = WestconYellow,
                                     strokeWidth = 2.dp
                                 )
                             } else {

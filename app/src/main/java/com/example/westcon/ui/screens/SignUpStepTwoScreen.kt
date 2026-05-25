@@ -45,8 +45,26 @@ fun SignUpStepTwoScreen(
     var selectedIcon by remember { mutableStateOf("Person") }
     var username by remember { mutableStateOf("") }
     var college by remember { mutableStateOf("CICT") }
-    var program by remember { mutableStateOf("BSCS") }
+    var program by remember { mutableStateOf("BSIT") }
     var year by remember { mutableStateOf("1") }
+    
+    // Mapping of colleges to their programs
+    val collegePrograms = remember {
+        mapOf(
+            "CICT" to listOf("BLIS", "BSCS", "BSEMC", "BSIS", "BSIT"),
+            "CON" to listOf("BSN"),
+            "COE" to listOf("BECE", "BEED", "BSED", "BSNE"),
+            "CAS" to listOf("AB ELS", "AB FL", "AB PolSci", "BS AppMath", "BS Bio", "BS Chem", "BS Psych")
+        )
+    }
+
+    // Update program when college changes
+    LaunchedEffect(college) {
+        val programs = collegePrograms[college] ?: listOf()
+        if (program !in programs) {
+            program = programs.firstOrNull() ?: ""
+        }
+    }
     
     // Step 2 skills
     val predefinedSkills = listOf("React & Next.js", "Python Basics", "Academic Writing", "UI/UX Logic")
@@ -79,229 +97,23 @@ fun SignUpStepTwoScreen(
                 .fillMaxSize()
                 .padding(horizontal = 24.dp)
                 .statusBarsPadding()
-                .padding(top = 110.dp),
+                .padding(top = 110.dp, bottom = 80.dp),
             horizontalAlignment = Alignment.Start
         ) {
-            // App Icon Branding
-            Icon(
-                painter = painterResource(id = R.drawable.icon),
-                contentDescription = null,
-                tint = WestconYellow,
-                modifier = Modifier.size(110.dp).offset(x = (-10).dp)
-            )
-            
-            Spacer(modifier = Modifier.height(10.dp))
-
-            if (step == 0) {
-                Text(
-                    text = "Pick your\nprofile avatar",
-                    color = Color.White,
-                    fontSize = 42.sp,
-                    lineHeight = 48.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = MomotrustFontFamily
+            Column(modifier = Modifier.weight(1f)) {
+                // App Icon Branding
+                Icon(
+                    painter = painterResource(id = R.drawable.icon),
+                    contentDescription = null,
+                    tint = WestconYellow,
+                    modifier = Modifier.size(110.dp).offset(x = (-10).dp)
                 )
                 
-                Spacer(modifier = Modifier.height(20.dp))
-                
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
-                    modifier = Modifier.fillMaxWidth().height(320.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(UIUtils.availableIcons) { iconName ->
-                        Box(
-                            modifier = Modifier
-                                .size(60.dp)
-                                .clip(CircleShape)
-                                .background(if (selectedIcon == iconName) WestconYellow.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f))
-                                .border(2.dp, if (selectedIcon == iconName) WestconYellow else Color.Transparent, CircleShape)
-                                .clickable { selectedIcon = iconName }
-                                .padding(10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                UIUtils.getProfileIcon(iconName),
-                                contentDescription = null,
-                                modifier = Modifier.size(36.dp),
-                                tint = if (selectedIcon == iconName) WestconYellow else Color.White
-                            )
-                        }
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(30.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                Button(
-                    onClick = { step = 1 },
-                    modifier = Modifier.fillMaxWidth().height(60.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF001229))
-                ) {
-                    Text("Continue", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
-                }
-            } else if (step == 1) {
-                Text(
-                    text = "Before we begin,\ntell us about\nyourself!",
-                    color = Color.White,
-                    fontSize = 42.sp,
-                    lineHeight = 48.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = MomotrustFontFamily
-                )
-
-                if (errorMessage != null) {
-                    Text(errorMessage!!, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp))
-                }
-
-                Spacer(modifier = Modifier.height(30.dp))
-
-                SignUpTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = "Username",
-                    icon = R.drawable.person
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        DropdownLabel("College")
-                        CustomDropdown(listOf("CICT", "CON", "COE", "CAS"), college) { college = it }
-                    }
-                    Column(modifier = Modifier.weight(1.2f)) {
-                        DropdownLabel("Program")
-                        CustomDropdown(listOf("BSIT", "BSCS", "BSIS"), program) { program = it }
-                    }
-                    Column(modifier = Modifier.weight(0.8f)) {
-                        DropdownLabel("Year Lvl.")
-                        CustomDropdown(listOf("1", "2", "3", "4"), year) { year = it }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(40.dp))
-
-                Button(
-                    onClick = {
-                        if (username.isEmpty()) {
-                            errorMessage = "Please enter a username"
-                            return@Button
-                        }
-                        scope.launch {
-                            isLoading = true
-                            if (FirebaseManager.checkUsernameExists(username)) {
-                                errorMessage = "Username already taken"
-                                isLoading = false
-                            } else {
-                                errorMessage = null
-                                isLoading = false
-                                step = 2
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(60.dp),
-                    enabled = !isLoading,
-                    shape = RoundedCornerShape(20.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF001229))
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(color = WestconYellow, modifier = Modifier.size(24.dp))
-                    } else {
-                        Text("Next", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
-                    }
-                }
-            } else if (step == 2) {
-                Text(
-                    text = "What skills can\nyou share with\nothers?",
-                    color = Color.White,
-                    fontSize = 42.sp,
-                    lineHeight = 48.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = MomotrustFontFamily
-                )
-                
-                Spacer(modifier = Modifier.height(20.dp))
-                
-                Text("Select skills you can teach:", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                @OptIn(ExperimentalLayoutApi::class)
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    predefinedSkills.forEach { skill ->
-                        val isSelected = selectedSkills.contains(skill)
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { if (isSelected) selectedSkills.remove(skill) else selectedSkills.add(skill) },
-                            label = { Text(skill) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = WestconYellow,
-                                selectedLabelColor = Color.Black,
-                                containerColor = Color.White.copy(alpha = 0.1f),
-                                labelColor = Color.White
-                            )
-                        )
-                    }
-                    
-                    FilterChip(
-                        selected = showOtherField,
-                        onClick = { showOtherField = !showOtherField },
-                        label = { Text("Others") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = WestconYellow,
-                            selectedLabelColor = Color.Black,
-                            containerColor = Color.White.copy(alpha = 0.1f),
-                            labelColor = Color.White
-                        )
-                    )
-                }
-                
-                if (showOtherField) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    SignUpTextField(
-                        value = otherSkill,
-                        onValueChange = { otherSkill = it },
-                        label = "Type your skill...",
-                        icon = R.drawable.tdesign_education_filled
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(40.dp))
-
-                Button(
-                    onClick = { step = 3 },
-                    modifier = Modifier.fillMaxWidth().height(60.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF001229))
-                ) {
-                    Text("Review Details", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
-                }
-                
-                TextButton(
-                    onClick = { step = 1 },
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                ) {
-                    Text("Go Back", color = Color.White.copy(alpha = 0.7f), fontFamily = MomotrustFontFamily)
-                }
-            } else if (step == 3) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                ) {
+                if (step == 0) {
                     Text(
-                        text = "Please confirm\nyour details",
+                        text = "Pick your\nprofile avatar",
                         color = Color.White,
                         fontSize = 42.sp,
                         lineHeight = 48.sp,
@@ -309,86 +121,107 @@ fun SignUpStepTwoScreen(
                         fontFamily = MomotrustFontFamily
                     )
                     
-                    Spacer(modifier = Modifier.height(30.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                     
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
-                        shape = RoundedCornerShape(16.dp)
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(4),
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        contentPadding = PaddingValues(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            Text("Email", fontSize = 12.sp, color = Color.Gray)
-                            Text(email, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Text("Password", fontSize = 12.sp, color = Color.Gray)
-                            Text("•".repeat(password.length), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Text("Username", fontSize = 12.sp, color = Color.Gray)
-                            Text(username, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
-                            
-                            Spacer(modifier = Modifier.height(12.dp))
-                            
-                            Text("Education", fontSize = 12.sp, color = Color.Gray)
-                            Text("$college | $program - Year $year", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
-                            
-                            Spacer(modifier = Modifier.height(12.dp))
-                            
-                            Text("Skills I Can Teach", fontSize = 12.sp, color = Color.Gray)
-                            val finalSkills = selectedSkills.toMutableList()
-                            if (showOtherField && otherSkill.isNotBlank()) {
-                                finalSkills.add(otherSkill.trim())
-                            }
-                            if (finalSkills.isEmpty()) {
-                                Text("None selected", fontSize = 16.sp, color = Color.DarkGray)
-                            } else {
-                                Text(finalSkills.joinToString(", "), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
+                        items(UIUtils.availableIcons) { iconName ->
+                            Box(
+                                modifier = Modifier
+                                    .size(60.dp)
+                                    .aspectRatio(1f)
+                                    .clip(CircleShape)
+                                    .background(if (selectedIcon == iconName) WestconYellow.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f))
+                                    .border(2.dp, if (selectedIcon == iconName) WestconYellow else Color.Transparent, CircleShape)
+                                    .clickable { selectedIcon = iconName }
+                                    .padding(10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    UIUtils.getProfileIcon(iconName),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(36.dp),
+                                    tint = if (selectedIcon == iconName) WestconYellow else Color.White
+                                )
                             }
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Button(
+                        onClick = { step = 1 },
+                        modifier = Modifier.fillMaxWidth().height(60.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF001229))
+                    ) {
+                        Text("Continue", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
+                    }
+                } else if (step == 1) {
+                    Text(
+                        text = "Before we begin,\ntell us about\nyourself!",
+                        color = Color.White,
+                        fontSize = 42.sp,
+                        lineHeight = 48.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = MomotrustFontFamily
+                    )
 
                     if (errorMessage != null) {
-                        val isSuccess = errorMessage!!.contains("successful")
-                        Text(
-                            errorMessage!!, 
-                            color = if (isSuccess) Color(0xFF4CAF50) else Color.Red, 
-                            fontSize = 12.sp, 
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
+                        Text(errorMessage!!, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp))
                     }
+
+                    Spacer(modifier = Modifier.height(30.dp))
+
+                    SignUpTextField(
+                        value = username,
+                        onValueChange = { username = it },
+                        label = "Username",
+                        icon = R.drawable.person
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            DropdownLabel("College")
+                            CustomDropdown(listOf("CICT", "CON", "COE", "CAS"), college) { college = it }
+                        }
+                        Column(modifier = Modifier.weight(1.2f)) {
+                            DropdownLabel("Program")
+                            CustomDropdown(collegePrograms[college] ?: listOf(), program) { program = it }
+                        }
+                        Column(modifier = Modifier.weight(0.8f)) {
+                            DropdownLabel("Year Lvl.")
+                            CustomDropdown(listOf("1", "2", "3", "4"), year) { year = it }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(40.dp))
 
                     Button(
                         onClick = {
-                            isLoading = true
-                            errorMessage = null
+                            if (username.isEmpty()) {
+                                errorMessage = "Please enter a username"
+                                return@Button
+                            }
                             scope.launch {
-                                val finalSkillsToSave = selectedSkills.toMutableList()
-                                if (showOtherField && otherSkill.isNotBlank()) {
-                                    finalSkillsToSave.add(otherSkill.trim())
-                                }
-
-                                val profile = UserProfile(
-                                    uid = FirebaseManager.getCurrentUser()?.uid ?: "",
-                                    name = username,
-                                    email = email,
-                                    profileIconName = selectedIcon,
-                                    department = college,
-                                    course = program,
-                                    year = year,
-                                    skillsToTeach = finalSkillsToSave.map { com.example.westcon.data.SkillMastery(skillName = it) }
-                                )
-                                
-                                val profileResult = FirebaseManager.saveUserProfile(profile)
-                                isLoading = false
-                                if (profileResult.isSuccess) {
-                                    onNextClick()
+                                isLoading = true
+                                if (FirebaseManager.checkUsernameExists(username)) {
+                                    errorMessage = "Username already taken"
+                                    isLoading = false
                                 } else {
-                                    errorMessage = "Failed to save profile: ${profileResult.exceptionOrNull()?.message}"
+                                    errorMessage = null
+                                    isLoading = false
+                                    step = 2
                                 }
                             }
                         },
@@ -400,18 +233,205 @@ fun SignUpStepTwoScreen(
                         if (isLoading) {
                             CircularProgressIndicator(color = WestconYellow, modifier = Modifier.size(24.dp))
                         } else {
-                            Text("Confirm & Finish", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
+                            Text("Next", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
                         }
+                    }
+                } else if (step == 2) {
+                    Text(
+                        text = "What skills can\nyou share with\nothers?",
+                        color = Color.White,
+                        fontSize = 42.sp,
+                        lineHeight = 48.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = MomotrustFontFamily
+                    )
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Text("Select skills you can teach:", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        predefinedSkills.forEach { skill ->
+                            val isSelected = selectedSkills.contains(skill)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { if (isSelected) selectedSkills.remove(skill) else selectedSkills.add(skill) },
+                                label = { Text(skill) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = WestconYellow,
+                                    selectedLabelColor = Color.Black,
+                                    containerColor = Color.White.copy(alpha = 0.1f),
+                                    labelColor = Color.White
+                                )
+                            )
+                        }
+                        
+                        FilterChip(
+                            selected = showOtherField,
+                            onClick = { showOtherField = !showOtherField },
+                            label = { Text("Others") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = WestconYellow,
+                                selectedLabelColor = Color.Black,
+                                containerColor = Color.White.copy(alpha = 0.1f),
+                                labelColor = Color.White
+                            )
+                        )
+                    }
+                    
+                    if (showOtherField) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        SignUpTextField(
+                            value = otherSkill,
+                            onValueChange = { otherSkill = it },
+                            label = "Type your skill...",
+                            icon = R.drawable.tdesign_education_filled
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(40.dp))
+
+                    Button(
+                        onClick = { step = 3 },
+                        modifier = Modifier.fillMaxWidth().height(60.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF001229))
+                    ) {
+                        Text("Review Details", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
                     }
                     
                     TextButton(
-                        onClick = { step = 2 },
-                        modifier = Modifier.align(Alignment.CenterHorizontally),
-                        enabled = !isLoading
+                        onClick = { step = 1 },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
                     ) {
-                        Text("Go Back to Edit", color = Color.White.copy(alpha = 0.7f), fontFamily = MomotrustFontFamily)
+                        Text("Go Back", color = Color.White.copy(alpha = 0.7f), fontFamily = MomotrustFontFamily)
                     }
-                    Spacer(modifier = Modifier.height(32.dp))
+                } else if (step == 3) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = "Please confirm\nyour details",
+                            color = Color.White,
+                            fontSize = 42.sp,
+                            lineHeight = 48.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = MomotrustFontFamily
+                        )
+                        
+                        Spacer(modifier = Modifier.height(30.dp))
+                        
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.9f)),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(20.dp)) {
+                                Text("Email", fontSize = 12.sp, color = Color.Gray)
+                                Text(email, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Text("Password", fontSize = 12.sp, color = Color.Gray)
+                                Text("•".repeat(password.length), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Text("Username", fontSize = 12.sp, color = Color.Gray)
+                                Text(username, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
+                                
+                                Spacer(modifier = Modifier.height(12.dp))
+                                
+                                Text("Education", fontSize = 12.sp, color = Color.Gray)
+                                Text("$college | $program - Year $year", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
+                                
+                                Spacer(modifier = Modifier.height(12.dp))
+                                
+                                Text("Skills I Can Teach", fontSize = 12.sp, color = Color.Gray)
+                                val finalSkills = selectedSkills.toMutableList()
+                                if (showOtherField && otherSkill.isNotBlank()) {
+                                    finalSkills.add(otherSkill.trim())
+                                }
+                                if (finalSkills.isEmpty()) {
+                                    Text("None selected", fontSize = 16.sp, color = Color.DarkGray)
+                                } else {
+                                    Text(finalSkills.joinToString(", "), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        if (errorMessage != null) {
+                            val isSuccess = errorMessage!!.contains("successful")
+                            Text(
+                                errorMessage!!, 
+                                color = if (isSuccess) Color(0xFF4CAF50) else Color.Red, 
+                                fontSize = 12.sp, 
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                isLoading = true
+                                errorMessage = null
+                                scope.launch {
+                                    val finalSkillsToSave = selectedSkills.toMutableList()
+                                    if (showOtherField && otherSkill.isNotBlank()) {
+                                        finalSkillsToSave.add(otherSkill.trim())
+                                    }
+
+                                    val profile = UserProfile(
+                                        uid = FirebaseManager.getCurrentUser()?.uid ?: "",
+                                        name = username,
+                                        email = email,
+                                        profileIconName = selectedIcon,
+                                        department = college,
+                                        course = program,
+                                        year = year,
+                                        skillsToTeach = finalSkillsToSave.map { com.example.westcon.data.SkillMastery(skillName = it) }
+                                    )
+                                    
+                                    val profileResult = FirebaseManager.saveUserProfile(profile)
+                                    isLoading = false
+                                    if (profileResult.isSuccess) {
+                                        onNextClick()
+                                    } else {
+                                        errorMessage = "Failed to save profile: ${profileResult.exceptionOrNull()?.message}"
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(60.dp),
+                            enabled = !isLoading,
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF001229))
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(color = WestconYellow, modifier = Modifier.size(24.dp))
+                            } else {
+                                Text("Confirm & Finish", color = WestconYellow, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = MomotrustFontFamily)
+                            }
+                        }
+                        
+                        TextButton(
+                            onClick = { step = 2 },
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            enabled = !isLoading
+                        ) {
+                            Text("Go Back to Edit", color = Color.White.copy(alpha = 0.7f), fontFamily = MomotrustFontFamily)
+                        }
+                        Spacer(modifier = Modifier.height(32.dp))
+                    }
                 }
             }
         }
@@ -461,7 +481,8 @@ fun CustomDropdown(options: List<String>, selectedOption: String, onOptionSelect
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = MomotrustFontFamily
-            )
+            ),
+            singleLine = true
         )
         ExposedDropdownMenu(
             expanded = expanded,

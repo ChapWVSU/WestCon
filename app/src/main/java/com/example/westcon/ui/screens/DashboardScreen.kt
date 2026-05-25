@@ -53,6 +53,10 @@ fun DashboardScreen(
     var showPostFreedomDialog by remember { mutableStateOf(false) }
     var skillToExchange by remember { mutableStateOf<com.example.westcon.data.SkillPost?>(null) }
     
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("westcon_prefs", android.content.Context.MODE_PRIVATE) }
+    var lastFreedomWallVisit by remember { mutableLongStateOf(prefs.getLong("last_freedom_visit", 0L)) }
+
     val notificationsFlow = remember { FirebaseManager.getNotifications() }
     val notifications by notificationsFlow.collectAsState(initial = emptyList())
     val hasUnread = notifications.any { !it.isActuallyRead }
@@ -64,12 +68,17 @@ fun DashboardScreen(
     
     val freedomPostsFlow = remember { FirebaseManager.getFreedomPosts() }
     val freedomPosts by freedomPostsFlow.collectAsState(initial = emptyList())
-    // For freedom, we could check if there's a post newer than user's last visit, 
-    // but for now let's just show a badge if there are posts at all as a simple implementation.
-    // Or better, if there are posts from the last 24 hours.
-    val hasNewFreedom = remember(freedomPosts) {
-        val yesterday = com.google.firebase.Timestamp(System.currentTimeMillis() / 1000 - 86400, 0)
-        freedomPosts.any { it.timestamp.seconds > yesterday.seconds }
+    
+    val hasNewFreedom = remember(freedomPosts, lastFreedomWallVisit) {
+        freedomPosts.any { it.timestamp.seconds > lastFreedomWallVisit }
+    }
+
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 1) {
+            val now = System.currentTimeMillis() / 1000
+            lastFreedomWallVisit = now
+            prefs.edit().putLong("last_freedom_visit", now).apply()
+        }
     }
 
     // Update online status
@@ -107,7 +116,14 @@ fun DashboardScreen(
         bottomBar = { 
             DashboardBottomNav(
                 selectedTab = selectedTab, 
-                onTabSelected = { selectedTab = it },
+                onTabSelected = { 
+                    selectedTab = it
+                    if (it == 1) {
+                        val now = System.currentTimeMillis() / 1000
+                        lastFreedomWallVisit = now
+                        prefs.edit().putLong("last_freedom_visit", now).apply()
+                    }
+                },
                 hasUnreadMessages = hasUnreadMessages,
                 hasNewFreedom = hasNewFreedom
             )
@@ -221,9 +237,11 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
         modifier = Modifier.clip(RoundedCornerShape(28.dp)),
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        val screenHeight = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
+                .heightIn(max = screenHeight * 0.85f)
                 .wrapContentHeight(),
             color = White,
             shape = RoundedCornerShape(28.dp)
@@ -288,12 +306,11 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
                 if (postType == "SHARE" && userProfile != null && userProfile!!.skillsToTeach.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Choose from your skills:", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = WestconDarkBlue)
-                        FlowRow(
+                        LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            userProfile!!.skillsToTeach.forEach { skill ->
+                            items(userProfile!!.skillsToTeach) { skill ->
                                 val isSelected = title.equals(skill.skillName, ignoreCase = true)
                                 FilterChip(
                                     selected = isSelected,
@@ -470,7 +487,7 @@ fun PostSkillDialog(onDismiss: () -> Unit) {
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = White, strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = WestconYellow, strokeWidth = 2.dp)
                     } else {
                         Text(if (postType == "SHARE") "Post to Share" else "Post to Find", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
@@ -544,7 +561,7 @@ fun HomeFeed(
             
             item {
                 Text(
-                    if (selectedCategory == "All Skills") "Skill Marketplace" else "$selectedCategory Skills",
+                    if (selectedCategory == "All Skills") "Skill Domain" else "$selectedCategory Skills",
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
@@ -1103,7 +1120,7 @@ fun DashboardBottomNav(
     ) {
         val items = listOf(
             Triple("HOME", Icons.Default.Home, 0),
-            Triple("FREEDOM", Icons.Default.EditNote, 1),
+            Triple("FREEDOM", if (hasNewFreedom) Icons.Default.EditNote else Icons.Default.SpeakerNotes, 1),
             Triple("MESSAGES", Icons.Default.Email, 2),
             Triple("PROFILE", Icons.Default.Person, 3)
         )

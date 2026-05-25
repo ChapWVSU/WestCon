@@ -712,15 +712,19 @@ fun ProfileScreen(
         AlertDialog(
             onDismissRequest = { if (!isSubmittingRating) showConfirmRating = false },
             containerColor = Color.White,
-            title = { Text("Submit Feedback", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
+            title = { Text("Confirm Feedback", fontWeight = FontWeight.Bold, color = WestconDarkBlue) },
             text = { 
                 Column {
-                    Text("Ready to submit your feedback for ${userProfile?.name}?")
+                    Text(
+                        "Ready to submit your feedback for ${userProfile?.name}?",
+                        fontWeight = FontWeight.Bold,
+                        color = WestconDarkBlue
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text("Teaching proficiency ($skillTheyTaughtName):", fontSize = 11.sp, color = Color.Gray)
+                    Text("Teaching proficiency ($skillTheyTaughtName):", fontSize = 11.sp, color = WestconDarkBlue)
                     Text("$ratingForTheirTeaching / 5.0 Stars", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = WestconDarkBlue)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Learning progress ($skillTheyLearnedName):", fontSize = 11.sp, color = Color.Gray)
+                    Text("Learning progress ($skillTheyLearnedName):", fontSize = 11.sp, color = WestconDarkBlue)
                     Text("$ratingForTheirLearning / 5.0 Stars", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = WestconDarkBlue)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("This action is final and cannot be changed.", fontWeight = FontWeight.Bold, color = Color.Red, fontSize = 11.sp)
@@ -754,13 +758,13 @@ fun ProfileScreen(
                     enabled = !isSubmittingRating,
                     colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue)
                 ) {
-                    if (isSubmittingRating) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    else Text("Confirm & Submit")
+                    if (isSubmittingRating) CircularProgressIndicator(color = WestconYellow, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Text("Confirm & Submit", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showConfirmRating = false }, enabled = !isSubmittingRating) {
-                    Text("Go Back", color = Color.Gray)
+                    Text("Go Back", color = WestconDarkBlue, fontWeight = FontWeight.Bold)
                 }
             }
         )

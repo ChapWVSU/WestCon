@@ -236,7 +236,7 @@ fun CommentDialog(postId: String, onDismiss: () -> Unit) {
                             .size(44.dp)
                             .background(if (content.isNotBlank()) WestconDarkBlue else Color.LightGray.copy(alpha = 0.3f), CircleShape)
                     ) {
-                        if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = White, strokeWidth = 2.dp)
+                        if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = WestconYellow, strokeWidth = 2.dp)
                         else Icon(Icons.Default.Send, contentDescription = "Send", tint = White, modifier = Modifier.size(20.dp))
                     }
                 }
@@ -455,7 +455,7 @@ fun PostFreedomDialog(onDismiss: () -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = WestconDarkBlue),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
+                        if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = WestconYellow)
                         else Text("Post", color = Color.White)
                     }                }
             }
