@@ -24,7 +24,7 @@ import com.example.westcon.ui.FooterSection
 import kotlinx.coroutines.delay
 
 @Composable
-fun LoginScreen(onLoginSuccess: () -> Unit, onSignUpClick: () -> Unit, onBackClick: () -> Unit) {
+fun LoginScreen(onLoginSuccess: (String) -> Unit, onSignUpClick: () -> Unit, onBackClick: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -42,12 +42,16 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onSignUpClick: () -> Unit, onBackCli
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp)
                 .statusBarsPadding()
-                .padding(top = 100.dp, bottom = 80.dp),
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.Start
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Spacer(modifier = Modifier.weight(1f))
+
+            Column {
                 // Yellow Cap Icon
                 Icon(
                     painter = painterResource(id = R.drawable.icon),
@@ -62,8 +66,8 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onSignUpClick: () -> Unit, onBackCli
                 Text(
                     text = "Welcome Back,\nTaga-WEST!",
                     color = Color.White,
-                    fontSize = 42.sp,
-                    lineHeight = 48.sp,
+                    fontSize = 36.sp,
+                    lineHeight = 42.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = MomotrustFontFamily,
                     modifier = Modifier.padding(horizontal = 4.dp)
@@ -198,7 +202,8 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onSignUpClick: () -> Unit, onBackCli
                             isLoading = false
                             if (result.isSuccess) {
                                 if (FirebaseManager.isEmailVerified()) {
-                                    onLoginSuccess()
+                                    val uid = result.getOrNull() ?: ""
+                                    onLoginSuccess(uid)
                                 } else {
                                     errorMessage = "Email not verified. Please check your inbox and spam folder."
                                     FirebaseManager.logout()
@@ -240,9 +245,10 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onSignUpClick: () -> Unit, onBackCli
                     )
                 }
             }
-        }
 
-        // Shared Footer
-        FooterSection(Modifier.align(Alignment.BottomCenter))
+            Spacer(modifier = Modifier.weight(1f))
+            FooterSection(Modifier.align(Alignment.CenterHorizontally))
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }

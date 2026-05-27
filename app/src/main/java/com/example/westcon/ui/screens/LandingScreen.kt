@@ -32,11 +32,15 @@ fun LandingScreen(onSignUpClick: () -> Unit, onLoginClick: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
                 .padding(horizontal = 24.dp)
-                .padding(top = 220.dp, bottom = 80.dp),
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.Start
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Spacer(modifier = Modifier.height(120.dp))
+
+            Column(modifier = Modifier.weight(1f, fill = false)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         painter = painterResource(id = R.drawable.icon),
@@ -95,8 +99,9 @@ fun LandingScreen(onSignUpClick: () -> Unit, onLoginClick: () -> Unit) {
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(40.dp))
+            FooterSection(Modifier.align(Alignment.CenterHorizontally))
+            Spacer(modifier = Modifier.height(16.dp))
         }
-
-        FooterSection(Modifier.align(Alignment.BottomCenter))
     }
 }

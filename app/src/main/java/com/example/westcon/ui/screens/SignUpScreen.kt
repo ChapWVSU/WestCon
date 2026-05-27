@@ -64,12 +64,16 @@ fun RegisterScreen(onJoinClick: (String, String) -> Unit, onBackClick: () -> Uni
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp)
                 .statusBarsPadding()
-                .padding(top = 110.dp, bottom = 80.dp),
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.Start
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Spacer(modifier = Modifier.weight(1f))
+
+            Column {
                 Icon(
                     painter = painterResource(id = R.drawable.icon),
                     contentDescription = null,
@@ -77,15 +81,14 @@ fun RegisterScreen(onJoinClick: (String, String) -> Unit, onBackClick: () -> Uni
                     modifier = Modifier.size(130.dp)
                 )
 
-                Spacer(modifier = Modifier.height(height = 20.dp))
+                Spacer(modifier = Modifier.height(20.dp))
                 Text(
                     text = "Welcome,\nTaga-WEST!",
                     modifier = Modifier
-                        .padding(start = 4.dp, end = 4.dp, bottom = 4.dp)
-                        .offset(y = (-30).dp),
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
                     color = Color.White,
-                    fontSize = 42.sp,
-                    lineHeight = 46.sp,
+                    fontSize = 36.sp,
+                    lineHeight = 42.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = MomotrustFontFamily
                 )
@@ -96,7 +99,7 @@ fun RegisterScreen(onJoinClick: (String, String) -> Unit, onBackClick: () -> Uni
                         errorMessage!!, 
                         color = if (isSuccess) Color(0xFF4CAF50) else Color.Red, 
                         fontSize = 12.sp, 
-                        modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp)
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
                     )
                 }
 
@@ -136,7 +139,7 @@ fun RegisterScreen(onJoinClick: (String, String) -> Unit, onBackClick: () -> Uni
                                     fontFamily = MomotrustFontFamily
                                 )
                             }
-                            
+
                             if (resendCooldown > 0) {
                                 Text(
                                     "You can resend the link in ${resendCooldown}s",
@@ -187,17 +190,17 @@ fun RegisterScreen(onJoinClick: (String, String) -> Unit, onBackClick: () -> Uni
                                 errorMessage = "Passwords do not match"
                                 return@Button
                             }
-                            
+
                             val hasUppercase = password.any { it.isUpperCase() }
                             val hasLowercase = password.any { it.isLowerCase() }
                             val hasDigit = password.any { it.isDigit() }
                             val hasSpecial = password.any { !it.isLetterOrDigit() }
-                            
+
                             if (password.length < 8 || !hasUppercase || !hasLowercase || !hasDigit || !hasSpecial) {
                                 errorMessage = "Password must be at least 8 characters and contain 1 uppercase, 1 lowercase, 1 number, and 1 special character"
                                 return@Button
                             }
-                            
+
                             isLoading = true
                             errorMessage = null
                             scope.launch {
@@ -262,9 +265,9 @@ fun RegisterScreen(onJoinClick: (String, String) -> Unit, onBackClick: () -> Uni
                             fontFamily = MomotrustFontFamily
                         )
                     }
-                    
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     TextButton(
                         onClick = { 
                             isVerificationPending = false
@@ -285,7 +288,10 @@ fun RegisterScreen(onJoinClick: (String, String) -> Unit, onBackClick: () -> Uni
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+            FooterSection(Modifier.align(Alignment.CenterHorizontally))
+            Spacer(modifier = Modifier.height(16.dp))
         }
-        FooterSection(Modifier.align(Alignment.BottomCenter))
     }
 }

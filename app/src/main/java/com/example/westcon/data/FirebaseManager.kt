@@ -76,6 +76,10 @@ object FirebaseManager {
         return try { usersCollection.document(profile.uid).set(profile).await(); Result.success(Unit) } catch (e: Exception) { Result.failure(e) }
     }
 
+    suspend fun isProfileComplete(uid: String): Boolean {
+        return try { usersCollection.document(uid).get().await().exists() } catch (e: Exception) { false }
+    }
+
     suspend fun getUserProfile(uid: String): UserProfile? {
         return try {
             val snapshot = usersCollection.document(uid).get().await()

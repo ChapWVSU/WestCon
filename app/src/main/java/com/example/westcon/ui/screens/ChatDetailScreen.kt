@@ -39,6 +39,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+import androidx.compose.ui.platform.LocalDensity
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatDetailScreen(
@@ -74,6 +76,9 @@ fun ChatDetailScreen(
     val listState = rememberLazyListState()
     var messageText by remember { mutableStateOf("") }
     val context = LocalContext.current
+
+    // Detect if keyboard is visible
+    val isKeyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
     // Fetch data and mark as read
     LaunchedEffect(otherUserUid) {
@@ -176,14 +181,15 @@ fun ChatDetailScreen(
         )
     }
 
-    // Auto-scroll to bottom
-    LaunchedEffect(messages, isOtherUserTyping) {
+    // Auto-scroll to bottom on messages, typing, or keyboard opening
+    LaunchedEffect(messages, isOtherUserTyping, isKeyboardVisible) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
     }
 
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             Box(
                 modifier = Modifier
@@ -475,7 +481,7 @@ fun ChatInputBar(
     Surface(
         color = Color.White,
         shadowElevation = 12.dp,
-        modifier = Modifier.padding(WindowInsets.ime.asPaddingValues())
+        modifier = Modifier.imePadding().navigationBarsPadding()
     ) {
         Row(
             modifier = Modifier

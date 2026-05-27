@@ -3,6 +3,8 @@ package com.example.westcon.ui.screens
 import com.example.westcon.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -95,12 +97,16 @@ fun SignUpStepTwoScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp)
                 .statusBarsPadding()
-                .padding(top = 110.dp, bottom = 80.dp),
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.Start
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Spacer(modifier = Modifier.weight(1f))
+
+            Column {
                 // App Icon Branding
                 Icon(
                     painter = painterResource(id = R.drawable.icon),
@@ -115,26 +121,27 @@ fun SignUpStepTwoScreen(
                     Text(
                         text = "Pick your\nprofile avatar",
                         color = Color.White,
-                        fontSize = 42.sp,
-                        lineHeight = 48.sp,
+                        fontSize = 36.sp,
+                        lineHeight = 42.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = MomotrustFontFamily
                     )
                     
                     Spacer(modifier = Modifier.height(20.dp))
                     
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(4),
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                        contentPadding = PaddingValues(vertical = 8.dp),
+                    // Note: LazyVerticalGrid inside a verticalScroll Column is problematic.
+                    // We'll use a simple Column with Rows or just FlowRow for icons.
+                    // Given availableIcons is small, we can use FlowRow.
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(UIUtils.availableIcons) { iconName ->
+                        UIUtils.availableIcons.forEach { iconName ->
                             Box(
                                 modifier = Modifier
                                     .size(60.dp)
-                                    .aspectRatio(1f)
                                     .clip(CircleShape)
                                     .background(if (selectedIcon == iconName) WestconYellow.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f))
                                     .border(2.dp, if (selectedIcon == iconName) WestconYellow else Color.Transparent, CircleShape)
@@ -152,7 +159,7 @@ fun SignUpStepTwoScreen(
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(40.dp))
 
                     Button(
                         onClick = { step = 1 },
@@ -166,8 +173,8 @@ fun SignUpStepTwoScreen(
                     Text(
                         text = "Before we begin,\ntell us about\nyourself!",
                         color = Color.White,
-                        fontSize = 42.sp,
-                        lineHeight = 48.sp,
+                        fontSize = 36.sp,
+                        lineHeight = 42.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = MomotrustFontFamily
                     )
@@ -240,8 +247,8 @@ fun SignUpStepTwoScreen(
                     Text(
                         text = "What skills can\nyou share with\nothers?",
                         color = Color.White,
-                        fontSize = 42.sp,
-                        lineHeight = 48.sp,
+                        fontSize = 36.sp,
+                        lineHeight = 42.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = MomotrustFontFamily
                     )
@@ -315,15 +322,13 @@ fun SignUpStepTwoScreen(
                     }
                 } else if (step == 3) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = "Please confirm\nyour details",
                             color = Color.White,
-                            fontSize = 42.sp,
-                            lineHeight = 48.sp,
+                            fontSize = 36.sp,
+                            lineHeight = 42.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = MomotrustFontFamily
                         )
@@ -430,12 +435,14 @@ fun SignUpStepTwoScreen(
                         ) {
                             Text("Go Back to Edit", color = Color.White.copy(alpha = 0.7f), fontFamily = MomotrustFontFamily)
                         }
-                        Spacer(modifier = Modifier.height(32.dp))
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.weight(1f))
+            FooterSection(Modifier.align(Alignment.CenterHorizontally))
+            Spacer(modifier = Modifier.height(16.dp))
         }
-        FooterSection(Modifier.align(Alignment.BottomCenter))
     }
 }
 
